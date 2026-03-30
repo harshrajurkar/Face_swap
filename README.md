@@ -1,12 +1,83 @@
 # Face_swap
 
-i made this tool to make reels and pics to make and groww faceless or AI model instagram page
+Face_swap is a full-stack AI face swap web app for creating faceless content, AI model visuals, reels, and image experiments. It combines a simple Next.js frontend with a FastAPI backend, Redis queueing, a Python worker, InsightFace face swapping, and optional GFPGAN face enhancement.
 
-## AI Face Swap App
+## What this project does
 
-A full-stack async face swap application using Next.js on the frontend and FastAPI + Redis + a Python worker on the backend. Users upload a source face image and a target image, the backend stores them on disk, pushes a job into Redis, and the worker performs the face swap with InsightFace `inswapper_128.onnx`.
+A user uploads:
+- a source face image
+- a target image
 
-## Project Structure
+The system then:
+- saves both files locally
+- creates a job ID
+- pushes the job into Redis
+- lets a background worker process the face swap asynchronously
+- stores the final image locally
+- returns the job status and output URL back to the frontend
+
+This makes the app more stable than running the entire AI pipeline inside a single web request.
+
+## Why this setup
+
+### Next.js frontend
+We use Next.js because it gives a quick UI for uploads, polling, and result display without adding unnecessary complexity.
+
+### FastAPI backend
+We use FastAPI because it is lightweight, fast, and works very well for file upload APIs and async job endpoints.
+
+### Redis queue
+We use Redis so uploads and AI processing are decoupled. Face swap jobs can take time, and Redis gives a clean way to queue work instead of blocking the API.
+
+### Background worker
+We use a separate Python worker so the expensive AI processing happens outside the API process. That keeps the backend responsive.
+
+### InsightFace + inswapper_128.onnx
+We use InsightFace because it is one of the most practical local face swap pipelines for identity transfer.
+
+### GFPGAN enhancement
+We use GFPGAN as an optional post-processing step because raw `inswapper_128` outputs can look soft or blurry. GFPGAN helps restore facial detail after the swap.
+
+### Python 3.11
+We use Python 3.11 because GFPGAN and its dependency chain are much more reliable there than on Python 3.13 in this setup.
+
+### Local filesystem storage
+We store uploads and outputs locally in `backend/uploads` and `backend/outputs` because this project is built for local use and simple deployment.
+
+## Architecture
+
+```text
+Frontend (Next.js)
+    -> POST upload request
+FastAPI backend
+    -> save files locally
+    -> create job
+    -> push job to Redis
+Worker
+    -> pull job from Redis
+    -> run InsightFace swap
+    -> optionally run GFPGAN enhancement
+    -> save output locally
+Frontend
+    -> poll job status
+    -> display final image
+```
+
+## Current working setup
+
+This is the setup that currently works best for this repo:
+
+- Frontend: Next.js
+- Backend: FastAPI
+- Queue: Redis in Docker
+- Worker: Python background worker
+- Python env for backend and worker: `backend\.venv311`
+- AI swap model: `inswapper_128.onnx`
+- Optional enhancer: GFPGAN
+- Start script: `start-all.ps1`
+- Stop script: `stop-all.ps1`
+
+## Project structure
 
 ```text
 ai-face-swap/
@@ -17,6 +88,7 @@ ai-face-swap/
       routes/
         job.py
       services/
+        enhancement_service.py
         face_service.py
         job_store.py
         queue_service.py
@@ -34,158 +106,222 @@ ai-face-swap/
       index.js
     package.json
     Dockerfile
+  logs/
+  start-all.ps1
+  stop-all.ps1
   docker-compose.yml
   README.md
 ```
 
 ## Features
 
-- Upload source face and target image
-- FastAPI endpoint to create jobs
-- Redis-backed queue
-- Background worker for face swap processing
-- Redis job status store with polling
-- Static output serving from FastAPI
-- Local filesystem storage in `uploads/` and `outputs/`
-- Optional GFPGAN face enhancement
-- Graceful error handling for invalid files and missing faces
+- Upload source face image and target image
+- Async job creation and polling
+- Redis queue-based processing
+- Background worker execution
+- Static output file serving from FastAPI
+- Prompt field for comparison notes
+- Optional GFPGAN enhancement toggle
+- Local storage for uploads and outputs
+- Error handling for missing faces, bad input, and model issues
 
-## Prerequisites
+## Requirements
 
-### Local run
+Before installing, make sure you have:
 
-- Python 3.11 recommended for GFPGAN support
-- Node.js 20+
-- Redis 7+
-- Internet access on first run to download:
-  - `inswapper_128.onnx`
-  - InsightFace analysis models (`buffalo_l`)
-  - `GFPGANv1.3.pth` if enhancement is enabled
+- Python 3.11
+- Node.js
+- Docker Desktop running
+- Git
+- Internet access for first-time model downloads
 
-### Docker run
+## Important folders
 
-- Docker
-- Docker Compose
+- Uploads are stored in [uploads](D:\vscode repos\AI swaping tool\ai-face-swap\backend\uploads)
+- Generated results are stored in [outputs](D:\vscode repos\AI swaping tool\ai-face-swap\backend\outputs)
+- Models are stored in [models](D:\vscode repos\AI swaping tool\ai-face-swap\backend\models)
+- Logs are stored in [logs](D:\vscode repos\AI swaping tool\ai-face-swap\logs)
 
-## Backend Setup
+## API routes
+
+### `POST /api/create-job`
+Creates a new face swap job from uploaded files.
+
+Form fields:
+- `source_image`
+- `target_image`
+- `prompt`
+- `enhance_face`
+- `response_base_url`
+
+### `GET /api/job/{job_id}`
+Returns:
+- job status
+- output path
+- output URL
+- error details if the job failed
+
+## Notes about quality
+
+- `inswapper_128.onnx` is good for identity replacement, but it can still look soft on bad inputs.
+- Best results come from sharp, front-facing, high-resolution faces.
+- GFPGAN can improve facial detail, but it will not turn the app into a prompt-driven cinematic generator.
+- The prompt field is currently stored with the job for comparison and workflow notes. It does not directly control the InsightFace swap result.
+
+## Install
+
+### 1. Clone the repo
 
 ```powershell
-cd "D:\vscode repos\AI swaping tool\ai-face-swap\backend"
+git clone https://github.com/harshrajurkar/Face_swap.git
+cd Face_swap
+```
+
+### 2. Create the backend Python 3.11 environment
+
+```powershell
+cd backend
 py -3.11 -m venv .venv311
 .\.venv311\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
 .\.venv311\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv311\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-## Worker Setup
-
-Open a second terminal in `backend` and run:
+### 3. Install frontend dependencies
 
 ```powershell
-cd "D:\vscode repos\AI swaping tool\ai-face-swap\backend"
-.\.venv311\Scripts\python.exe -m worker.worker
+cd ..\frontend
+npm.cmd install
 ```
 
-## Redis Setup
+## Setup
 
-If you prefer Docker for Redis:
+### 1. Start Redis
+
+If the Redis container already exists:
 
 ```powershell
 docker start ai-face-swap-redis
 ```
 
-If the container does not exist yet:
+If it does not exist yet:
 
 ```powershell
 docker run -d --name ai-face-swap-redis -p 6379:6379 redis:7-alpine
 ```
 
-## Frontend Setup
+### 2. Make sure model folders exist
 
-```powershell
-cd "D:\vscode repos\AI swaping tool\ai-face-swap\frontend"
-npm.cmd install
-npm.cmd run dev
-```
+These are already included in the project layout, but the app will use:
 
-The app will be available at [http://localhost:3000](http://localhost:3000).
+- `backend/models/inswapper_128.onnx`
+- `backend/models/GFPGANv1.3.pth`
 
-## Full Docker Compose Run
+Some models may download automatically on first run.
+
+## Start
+
+You can start the app in two ways.
+
+### Option 1. Start everything with the PowerShell script
 
 From the repo root:
 
 ```powershell
-cd "D:\vscode repos\AI swaping tool\ai-face-swap"
-docker compose up --build
-```
-
-## API Endpoints
-
-### `POST /api/create-job`
-
-Accepts multipart form data:
-
-- `source_image`: source face image file
-- `target_image`: target image file
-- `prompt`: stored comparison prompt text
-- `enhance_face`: `true` or `false`
-- `response_base_url`: optional base URL used to return an absolute output URL
-
-### `GET /api/job/{job_id}`
-
-Returns job state, errors, and output URL when ready.
-
-## Browser Testing
-
-1. Open [http://localhost:3000](http://localhost:3000).
-2. Upload a source face image with a clear, front-facing face.
-3. Upload a target image that also contains a face.
-4. Keep enhancement enabled for sharper output.
-5. Submit the form.
-6. Wait for the polling status to move from `queued` to `processing` to `completed`.
-
-## Static Output Serving
-
-Completed images are served by FastAPI from:
-
-- [http://127.0.0.1:8000/outputs](http://127.0.0.1:8000/outputs)
-
-## CPU vs GPU Notes
-
-### CPU
-
-- The included `requirements.txt` uses `onnxruntime`, which runs on CPU.
-- This is the easiest setup and works on most machines.
-- Processing will be slower for large images.
-
-### GPU
-
-To use NVIDIA GPU acceleration:
-
-1. Replace `onnxruntime` with `onnxruntime-gpu` in `backend/requirements.txt`.
-2. Set `EXECUTION_PROVIDER=CUDAExecutionProvider`.
-3. Make sure CUDA and cuDNN are installed and compatible with your ONNX Runtime build.
-
-## Notes
-
-- The worker loads the InsightFace models on startup, so the first run can take a bit longer.
-- The backend stores job metadata in Redis with a 24 hour TTL.
-- Output images are written as PNG files.
-- The swap uses the largest detected face in the source and target images.
-- GFPGAN support works best from the Python 3.11 environment at `backend\.venv311`.
-
-## Background Scripts
-
-Start everything in background:
-
-```powershell
-cd "D:\vscode repos\AI swaping tool\ai-face-swap"
 powershell -ExecutionPolicy Bypass -File .\start-all.ps1
 ```
 
-Stop everything:
+This starts:
+- Redis container
+- FastAPI backend
+- worker
+- frontend
+
+### Option 2. Start each service manually
+
+#### Backend
 
 ```powershell
-cd "D:\vscode repos\AI swaping tool\ai-face-swap"
+cd backend
+.\.venv311\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+#### Worker
+
+Open another terminal:
+
+```powershell
+cd backend
+.\.venv311\Scripts\python.exe -m worker.worker
+```
+
+#### Frontend
+
+Open another terminal:
+
+```powershell
+cd frontend
+npm.cmd run dev
+```
+
+## Stop
+
+To stop everything started by the PowerShell script:
+
+```powershell
 powershell -ExecutionPolicy Bypass -File .\stop-all.ps1
 ```
+
+## Use
+
+### 1. Open the app
+
+Go to:
+- [http://localhost:3000](http://localhost:3000)
+
+### 2. Upload images
+
+Choose:
+- source face image
+- target image
+
+### 3. Optional settings
+
+- enter a comparison prompt
+- enable or disable GFPGAN enhancement
+
+### 4. Submit the job
+
+The frontend will call the backend and create a queued job.
+
+### 5. Wait for processing
+
+The UI polls job status automatically:
+- `queued`
+- `processing`
+- `completed`
+- `failed`
+
+### 6. View result
+
+When complete, the output image is shown in the browser and also saved locally in:
+- `backend/outputs`
+
+## Useful URLs
+
+- Frontend: [http://localhost:3000](http://localhost:3000)
+- Backend docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+
+## Logs
+
+If something fails while using the background startup script, check:
+
+- [backend.log](D:\vscode repos\AI swaping tool\ai-face-swap\logs\backend.log)
+- [worker.log](D:\vscode repos\AI swaping tool\ai-face-swap\logs\worker.log)
+- [frontend.log](D:\vscode repos\AI swaping tool\ai-face-swap\logs\frontend.log)
+
+## GPU note
+
+The current repo is set up for CPU using `onnxruntime`.
+
+If you want GPU support later, you can switch to a CUDA-compatible ONNX Runtime build and update the execution provider.
