@@ -12,4 +12,5 @@ basicsr==1.4.2
 facexlib==0.3.0
 torch==2.7.0
 torchvision==0.22.0
+pillow==11.2.1
 pydantic-settings==2.8.1

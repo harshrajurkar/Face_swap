@@ -1,5 +1,6 @@
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import redis.asyncio as redis
 
@@ -14,7 +15,7 @@ class JobStore:
         self.storage = StorageService(settings)
 
     def _key(self, job_id: str) -> str:
-        return f"job:{job_id}"
+        return f'job:{job_id}'
 
     async def create_job(
         self,
@@ -24,21 +25,26 @@ class JobStore:
         prompt: str | None = None,
         enhance_face: bool = False,
         response_base_url: str | None = None,
+        similarity_percent: float | None = None,
+        similarity_score: float | None = None,
     ) -> None:
         now = datetime.now(UTC).isoformat()
         payload = {
-            "job_id": job_id,
-            "status": "queued",
-            "source_path": source_path,
-            "target_path": target_path,
-            "output_path": None,
-            "output_url": None,
-            "error": None,
-            "prompt": prompt,
-            "enhance_face": enhance_face,
-            "created_at": now,
-            "updated_at": now,
-            "response_base_url": response_base_url,
+            'job_id': job_id,
+            'job_type': 'swap',
+            'status': 'queued',
+            'source_path': source_path,
+            'target_path': target_path,
+            'output_path': None,
+            'output_url': None,
+            'error': None,
+            'prompt': prompt,
+            'enhance_face': enhance_face,
+            'similarity_percent': similarity_percent,
+            'similarity_score': similarity_score,
+            'created_at': now,
+            'updated_at': now,
+            'response_base_url': response_base_url,
         }
         await self.redis.set(self._key(job_id), json.dumps(payload), ex=self.settings.job_status_ttl_seconds)
 
@@ -53,13 +59,14 @@ class JobStore:
         if not existing:
             return
 
-        existing["status"] = status
-        existing["output_path"] = output_path
-        existing["output_url"] = (
-            self.storage.build_output_url(job_id, existing.get("response_base_url")) if output_path else None
-        )
-        existing["error"] = error
-        existing["updated_at"] = datetime.now(UTC).isoformat()
+        existing['status'] = status
+        existing['output_path'] = output_path
+        if output_path:
+            existing['output_url'] = self.storage.build_asset_url(Path(output_path).name, existing.get('response_base_url'))
+        else:
+            existing['output_url'] = None
+        existing['error'] = error
+        existing['updated_at'] = datetime.now(UTC).isoformat()
 
         await self.redis.set(self._key(job_id), json.dumps(existing), ex=self.settings.job_status_ttl_seconds)
 
