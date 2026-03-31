@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     gfpgan_model_url: str = 'https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.3.pth'
     execution_provider: str = 'CPUExecutionProvider'
     job_status_ttl_seconds: int = 60 * 60 * 24
+    max_upload_size_bytes: int = 15 * 1024 * 1024
     cors_origins: list[str] = ['http://localhost:3000']
 
     model_config = SettingsConfigDict(

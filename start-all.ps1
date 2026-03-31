@@ -43,7 +43,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Start-Sleep -Seconds 2
 
-$backendCommand = 'cd /d "{0}" && "{1}" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload >> "{2}" 2>&1' -f $BACKEND, $PY, $BACKEND_LOG
+$backendCommand = 'cd /d "{0}" && "{1}" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 >> "{2}" 2>&1' -f $BACKEND, $PY, $BACKEND_LOG
 $workerCommand = 'cd /d "{0}" && "{1}" -m worker.worker >> "{2}" 2>&1' -f $BACKEND, $PY, $WORKER_LOG
 
 $backend = Start-Process -WindowStyle Hidden -FilePath 'cmd.exe' -ArgumentList @('/c', $backendCommand) -PassThru
@@ -51,13 +51,13 @@ $worker = Start-Process -WindowStyle Hidden -FilePath 'cmd.exe' -ArgumentList @(
 
 if (-not (Test-Path (Join-Path $FRONTEND 'node_modules'))) {
     $install = Start-Process -WindowStyle Hidden -FilePath $npmCmd `
-        -ArgumentList @('install') `
+        -ArgumentList @('ci') `
         -WorkingDirectory $FRONTEND `
         -RedirectStandardOutput $FRONTEND_LOG `
         -RedirectStandardError (Join-Path $LOG_DIR 'frontend-error.log') `
         -PassThru -Wait
     if ($install.ExitCode -ne 0) {
-        Write-Error "Frontend dependency install failed. Check $FRONTEND_LOG and logs\\frontend-error.log"
+        Write-Error "Frontend dependency install failed. Check $FRONTEND_LOG and logs\frontend-error.log"
         exit 1
     }
 }

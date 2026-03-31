@@ -21,3 +21,6 @@ class QueueService:
             return None
         _, raw_payload = item
         return json.loads(raw_payload)
+
+    async def ping(self) -> bool:
+        return bool(await self.redis.ping())

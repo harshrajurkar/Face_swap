@@ -2,6 +2,7 @@ from pathlib import Path
 
 import aiofiles
 from fastapi import UploadFile
+from PIL import Image, UnidentifiedImageError
 
 from app.config import Settings
 
@@ -16,14 +17,30 @@ class StorageService:
             raise ValueError('Only .jpg, .jpeg, .png, and .webp images are supported.')
 
         destination = self.settings.uploads_dir / f'{job_id}_{kind}{extension}'
-        async with aiofiles.open(destination, 'wb') as file_handle:
-            while True:
-                chunk = await upload.read(1024 * 1024)
-                if not chunk:
-                    break
-                await file_handle.write(chunk)
-        await upload.close()
-        return str(destination.resolve())
+        total_bytes = 0
+
+        try:
+            async with aiofiles.open(destination, 'wb') as file_handle:
+                while True:
+                    chunk = await upload.read(1024 * 1024)
+                    if not chunk:
+                        break
+
+                    total_bytes += len(chunk)
+                    if total_bytes > self.settings.max_upload_size_bytes:
+                        raise ValueError(
+                            f'Image exceeds the upload limit of {self.settings.max_upload_size_bytes // (1024 * 1024)} MB.'
+                        )
+
+                    await file_handle.write(chunk)
+
+            self.validate_saved_image(destination)
+            return str(destination.resolve())
+        except Exception:
+            self.remove_file(destination)
+            raise
+        finally:
+            await upload.close()
 
     def build_output_path(self, job_id: str) -> str:
         return str((self.settings.outputs_dir / f'{job_id}.png').resolve())
@@ -43,3 +60,24 @@ class StorageService:
         if response_base_url:
             return f"{response_base_url.rstrip('/')}{relative}"
         return relative
+
+    @staticmethod
+    def validate_saved_image(path: Path) -> None:
+        try:
+            with Image.open(path) as image:
+                image.verify()
+            with Image.open(path) as image:
+                image.load()
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise ValueError('Uploaded file is not a valid supported image.') from exc
+
+    @staticmethod
+    def remove_file(path: str | Path) -> None:
+        candidate = Path(path)
+        if candidate.exists():
+            candidate.unlink(missing_ok=True)
+
+    def cleanup_job_files(self, *paths: str | Path | None) -> None:
+        for path in paths:
+            if path:
+                self.remove_file(path)
