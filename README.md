@@ -325,3 +325,20 @@ If something fails while using the background startup script, check:
 The current repo is set up for CPU using `onnxruntime`.
 
 If you want GPU support later, you can switch to a CUDA-compatible ONNX Runtime build and update the execution provider.
+
+
+Use these from the project root:
+
+powershell -ExecutionPolicy Bypass -File .\watch-logs.ps1
+That watches all logs live.
+
+Or watch one service only:
+
+powershell -ExecutionPolicy Bypass -File .\watch-logs.ps1 -Service backend
+powershell -ExecutionPolicy Bypass -File .\watch-logs.ps1 -Service worker
+powershell -ExecutionPolicy Bypass -File .\watch-logs.ps1 -Service frontend
+If you want to tail a single file manually without the script, use:
+
+Get-Content .\logs\worker.log -Wait -Tail 50
+Get-Content .\logs\backend.log -Wait -Tail 50
+Get-Content .\logs\frontend.log -Wait -Tail 50

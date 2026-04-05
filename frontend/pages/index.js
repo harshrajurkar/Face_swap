@@ -116,7 +116,13 @@ function Uploader({
           type="file"
           accept="image/*"
           hidden
-          onChange={(event) => onFileChange(event.target.files?.[0] || null)}
+          onClick={(event) => {
+            event.currentTarget.value = '';
+          }}
+          onChange={(event) => {
+            onFileChange(event.target.files?.[0] || null);
+            event.currentTarget.value = '';
+          }}
         />
 
         <button
@@ -165,6 +171,7 @@ export default function HomePage() {
   const [targetFaceSize, setTargetFaceSize] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [comparePosition, setComparePosition] = useState(50);
   const [restoredSession, setRestoredSession] = useState(false);
 
@@ -287,6 +294,37 @@ export default function HomePage() {
     }
     setTargetImage(file);
     setTargetPreviewUrl(createPreviewUrl(file));
+  }
+
+  async function handleDownload() {
+    if (!outputUrl || isDownloading) {
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      const response = await fetch(outputUrl);
+      if (!response.ok) {
+        throw new Error('Download failed.');
+      }
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const fallbackName = jobId ? `face-swap-${jobId}.png` : 'face-swap-output.png';
+      const fileName = outputUrl.split('/').pop() || fallbackName;
+
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (downloadError) {
+      setError(downloadError.message || 'Unable to download output.');
+    } finally {
+      setIsDownloading(false);
+    }
   }
 
   async function handleSubmit(event) {
@@ -625,9 +663,14 @@ export default function HomePage() {
                   </div>
 
                   <div className={styles.resultActions}>
-                    <a className={`${styles.primaryButton} ${styles.downloadButton}`} href={outputUrl} download>
-                      Download Output
-                    </a>
+                    <button
+                      className={`${styles.primaryButton} ${styles.downloadButton}`}
+                      type="button"
+                      onClick={handleDownload}
+                      disabled={isDownloading}
+                    >
+                      {isDownloading ? 'Downloading...' : 'Download Output'}
+                    </button>
                     <a className={styles.secondaryButton} href={outputUrl} target="_blank" rel="noreferrer">
                       Open Full Resolution
                     </a>
