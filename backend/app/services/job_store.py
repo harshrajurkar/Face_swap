@@ -24,11 +24,13 @@ class JobStore:
         target_path: str,
         prompt: str | None = None,
         enhance_face: bool = False,
+        job_type: str = 'swap',
+        is_video: bool = False,
     ) -> None:
         now = datetime.now(UTC).isoformat()
         payload = {
             'job_id': job_id,
-            'job_type': 'swap',
+            'job_type': job_type,
             'status': 'queued',
             'stage': 'queued',
             'progress': 5,
@@ -39,6 +41,10 @@ class JobStore:
             'error': None,
             'prompt': prompt,
             'enhance_face': enhance_face,
+            'is_video': is_video,
+            'frame_count': None,
+            'processed_frame_count': None,
+            'skipped_frame_count': None,
             'similarity_percent': None,
             'similarity_score': None,
             'source_face_size': None,

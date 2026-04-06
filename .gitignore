@@ -11,6 +11,7 @@ backend/outputs/*
 !backend/outputs/.gitkeep
 backend/models/*
 !backend/models/.gitkeep
+backend/temp_frames/
 __pycache__/
 *.pyc
 .DS_Store

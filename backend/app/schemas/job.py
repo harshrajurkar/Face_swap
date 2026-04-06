@@ -5,11 +5,13 @@ from pydantic import BaseModel, Field
 
 class CreateJobResponse(BaseModel):
     job_id: str
+    job_type: str
     status: str
     stage: str
     progress: int = Field(ge=0, le=100)
     prompt: str | None = None
     enhance_face: bool
+    is_video: bool = False
 
 
 class JobResponse(BaseModel):
@@ -25,6 +27,10 @@ class JobResponse(BaseModel):
     error: str | None = None
     prompt: str | None = None
     enhance_face: bool
+    is_video: bool = False
+    frame_count: int | None = None
+    processed_frame_count: int | None = None
+    skipped_frame_count: int | None = None
     similarity_percent: float | None = None
     similarity_score: float | None = None
     source_face_size: float | None = None
