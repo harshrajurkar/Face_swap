@@ -18,9 +18,13 @@ def _build_retry_payload(job: Mapping[str, object], retry_count: int) -> dict[st
 
 
 async def run_worker() -> None:
+    print("\n=== WORKER STARTING ===")
     settings = get_settings()
+    print(f"[DEBUG] Settings loaded: queue_name={settings.queue_name}")
     queue = QueueService(settings)
+    print("[DEBUG] QueueService initialized")
     processor = JobProcessor()
+    print("[DEBUG] JobProcessor initialized")
     concurrency = max(1, settings.worker_concurrency)
 
     logger.info(
@@ -30,18 +34,23 @@ async def run_worker() -> None:
         settings.worker_job_timeout_seconds,
         settings.worker_max_retries,
     )
-
+    print(f"[INFO] Worker configuration: concurrency={concurrency}, timeout={settings.worker_job_timeout_seconds}s")
     if concurrency != 1:
         logger.warning("This worker image is optimized for one job at a time. For scale-out, run more worker containers.")
+        print("[WARNING] Concurrency != 1")
 
     while True:
+        print(f"[DEBUG] Polling for jobs (timeout=5s)...")
         job = await queue.dequeue(timeout=5)
         if not job:
+            print(f"[DEBUG] No job received, sleeping for {settings.worker_poll_interval_seconds}s")
             await asyncio.sleep(settings.worker_poll_interval_seconds)
             continue
 
         retry_count = int(job.get("retry_count", 0))
-        logger.info("Processing job %s (attempt %s/%s)", job.get("job_id"), retry_count + 1, settings.worker_max_retries + 1)
+        job_id = job.get("job_id")
+        print(f"\n[INFO] ====== JOB DEQUEUED: {job_id} (attempt {retry_count + 1}/{settings.worker_max_retries + 1}) ======")
+        logger.info("Processing job %s (attempt %s/%s)", job_id, retry_count + 1, settings.worker_max_retries + 1)
         try:
             await asyncio.wait_for(
                 processor.process(job),

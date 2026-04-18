@@ -130,30 +130,20 @@ class FaceRegionProcessor:
         return scaled
 
     def create_blend_mask(self, height: int, width: int) -> np.ndarray:
-        """Create a feathered blending mask.
-
-        Creates a smooth gradient mask for seamless blending.
-        Edges are feathered to blend_width.
-
-        Args:
-            height: Mask height.
-            width: Mask width.
-
-        Returns:
-            Blending mask (grayscale, 0-255).
-        """
         blend_width = min(self.blend_width, height // 4, width // 4)
-        mask = np.ones((height, width), dtype=np.float32) * 255
 
-        # Feather edges
-        for i in range(blend_width):
-            alpha = i / blend_width
-            mask[i, :] = mask[i, :] * alpha
-            mask[height - 1 - i, :] = mask[height - 1 - i, :] * alpha
-            mask[:, i] = mask[:, i] * alpha
-            mask[:, width - 1 - i] = mask[:, width - 1 - i] * alpha
+        y = np.linspace(0, 1, height)
+        x = np.linspace(0, 1, width)
 
-        return mask.astype(np.uint8)
+        mask_y = np.minimum(y, y[::-1])
+        mask_x = np.minimum(x, x[::-1])
+
+        mask = np.outer(mask_y, mask_x)
+
+    # Apply blend width shaping
+        mask = np.clip(mask * (height / (2 * blend_width)), 0, 1)
+
+        return (mask * 255).astype(np.uint8)
 
     def blend_faces(
         self,
