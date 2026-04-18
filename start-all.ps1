@@ -9,6 +9,36 @@ $BACKEND_LOG = Join-Path $LOG_DIR 'backend.log'
 $WORKER_LOG = Join-Path $LOG_DIR 'worker.log'
 $FRONTEND_LOG = Join-Path $LOG_DIR 'frontend.log'
 
+function Get-PortListeners($port) {
+    $lines = netstat -ano -p tcp | Select-String ":$port"
+    $pids = @()
+    foreach ($line in $lines) {
+        $parts = ($line.ToString() -split '\s+') | Where-Object { $_ }
+        if ($parts.Length -ge 5 -and $parts[3] -eq 'LISTENING' -and $parts[4] -match '^\d+$') {
+            $pids += [int]$parts[4]
+        }
+    }
+    return $pids | Select-Object -Unique
+}
+
+function Wait-ForPort($port, $timeoutSeconds) {
+    $deadline = (Get-Date).AddSeconds($timeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if ((Get-PortListeners $port).Count -gt 0) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    return $false
+}
+
+function Test-ProcessAlive($pidValue) {
+    if (-not $pidValue) {
+        return $false
+    }
+    return [bool](Get-Process -Id $pidValue -ErrorAction SilentlyContinue)
+}
+
 Write-Host 'Starting AI Face Swap in background...'
 
 if (-not (Test-Path $PY)) {
@@ -43,11 +73,21 @@ if ($LASTEXITCODE -ne 0) {
 
 Start-Sleep -Seconds 2
 
-$backendCommand = 'cd /d "{0}" && "{1}" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload >> "{2}" 2>&1' -f $BACKEND, $PY, $BACKEND_LOG
+$backendCommand = 'cd /d "{0}" && "{1}" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 >> "{2}" 2>&1' -f $BACKEND, $PY, $BACKEND_LOG
 $workerCommand = 'cd /d "{0}" && "{1}" -m worker.worker >> "{2}" 2>&1' -f $BACKEND, $PY, $WORKER_LOG
 
 $backend = Start-Process -WindowStyle Hidden -FilePath 'cmd.exe' -ArgumentList @('/c', $backendCommand) -PassThru
+if (-not (Wait-ForPort 8000 20)) {
+    Write-Error "Backend did not start on port 8000. Check $BACKEND_LOG"
+    exit 1
+}
+
 $worker = Start-Process -WindowStyle Hidden -FilePath 'cmd.exe' -ArgumentList @('/c', $workerCommand) -PassThru
+Start-Sleep -Seconds 2
+if (-not (Test-ProcessAlive $worker.Id)) {
+    Write-Error "Worker exited during startup. Check $WORKER_LOG"
+    exit 1
+}
 
 if (-not (Test-Path (Join-Path $FRONTEND 'node_modules'))) {
     $install = Start-Process -WindowStyle Hidden -FilePath $npmCmd `
@@ -68,6 +108,11 @@ $frontend = Start-Process -WindowStyle Hidden -FilePath $npmCmd `
     -RedirectStandardOutput $FRONTEND_LOG `
     -RedirectStandardError (Join-Path $LOG_DIR 'frontend-error.log') `
     -PassThru
+
+if (-not (Wait-ForPort 3000 30)) {
+    Write-Error "Frontend did not start on port 3000. Check $FRONTEND_LOG and logs\\frontend-error.log"
+    exit 1
+}
 
 @{
     backend_pid = $backend.Id

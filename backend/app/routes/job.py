@@ -28,7 +28,7 @@ async def create_job(
     source_image: UploadFile = File(...),
     target_image: UploadFile = File(...),
     prompt: str | None = Form(default=None),
-    enhance_face: bool = Form(default=True),
+    enhance_face: bool = Form(default=False),
     response_base_url: str | None = Form(default=None),
     storage_service: StorageService = Depends(get_storage_service),
     job_store: JobStore = Depends(get_job_store),
@@ -41,7 +41,6 @@ async def create_job(
 
     job_id = str(uuid.uuid4())
     normalized_prompt = (prompt or "").strip() or None
-
     try:
         source_path = await storage_service.save_upload(job_id=job_id, kind="source", upload=source_image)
         target_path = await storage_service.save_upload(job_id=job_id, kind="target", upload=target_image)

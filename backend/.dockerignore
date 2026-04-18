@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.git
+.gitignore
+node_modules
+uploads
+outputs
+models
+logs
+*.log

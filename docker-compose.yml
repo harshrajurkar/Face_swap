@@ -1,34 +1,57 @@
+version: "3.9"
+
 services:
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   backend:
+    image: ai-face-swap-backend:cpu
     build:
       context: ./backend
+      dockerfile: Dockerfile
     environment:
       REDIS_URL: redis://redis:6379/0
       EXECUTION_PROVIDER: CPUExecutionProvider
+      WORKER_CONCURRENCY: 1
+      WORKER_JOB_TIMEOUT_SECONDS: 900
+      WORKER_MAX_RETRIES: 2
     ports:
       - "8000:8000"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/outputs:/app/outputs
       - ./backend/models:/app/models
 
   worker:
-    build:
-      context: ./backend
+    image: ai-face-swap-backend:cpu
     command: python -m worker.worker
     environment:
       REDIS_URL: redis://redis:6379/0
       EXECUTION_PROVIDER: CPUExecutionProvider
+      WORKER_CONCURRENCY: 1
+      WORKER_JOB_TIMEOUT_SECONDS: 900
+      WORKER_MAX_RETRIES: 2
     depends_on:
-      - redis
-      - backend
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/outputs:/app/outputs
@@ -43,4 +66,5 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
