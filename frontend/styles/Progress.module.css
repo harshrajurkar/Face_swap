@@ -1,0 +1,416 @@
+/* Progress Component Styles */
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 28px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    animation: slideIn 0.4s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Progress Bar Section */
+.progressSection {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.progressBar {
+    width: 100%;
+    height: 8px;
+    background-color: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.progressFill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    position: relative;
+    overflow: hidden;
+}
+
+.progressFill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg,
+            rgba(255, 255, 255, 0),
+            rgba(255, 255, 255, 0.3),
+            rgba(255, 255, 255, 0));
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.progressFill.completed {
+    background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.progressFill.failed {
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.progressLabel {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.percentage {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 14px;
+}
+
+/* Stage Section */
+.stageSection {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.stageHeader {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background-color: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.stageIcon {
+    font-size: 28px;
+    flex-shrink: 0;
+    animation: bounce 0.6s ease-out;
+}
+
+@keyframes bounce {
+    0% {
+        transform: scale(0.8) translateY(4px);
+        opacity: 0;
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+.stageInfo {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stageLabel {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+    letter-spacing: -0.5px;
+}
+
+.statusMessage {
+    margin: 0;
+    font-size: 13px;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
+.errorMessage {
+    margin: 0;
+    font-size: 13px;
+    color: #dc2626;
+    line-height: 1.4;
+    font-weight: 500;
+}
+
+.spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.checkmark {
+    width: 32px;
+    height: 32px;
+    background-color: #10b981;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: bold;
+    flex-shrink: 0;
+    animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0) rotate(-45deg);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1) rotate(0);
+        opacity: 1;
+    }
+}
+
+.cross {
+    width: 32px;
+    height: 32px;
+    background-color: #ef4444;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: bold;
+    flex-shrink: 0;
+    animation: shake 0.5s ease-out;
+}
+
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-4px);
+    }
+
+    75% {
+        transform: translateX(4px);
+    }
+}
+
+/* Stage Steps */
+.stageSteps {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background-color: #f9fafb;
+    border-radius: 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    min-width: 80px;
+}
+
+.stepDot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: #e5e7eb;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 12px;
+    transition: all 0.3s ease-out;
+    border: 2px solid transparent;
+}
+
+.stepDot.active {
+    transform: scale(1.15) boxShadow(0, 0, 12px rgba(99, 102, 241, 0.4));
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+}
+
+.stepDot.completed {
+    color: white;
+    font-weight: bold;
+}
+
+.stepLabel {
+    font-size: 11px;
+    text-align: center;
+    color: #9ca3af;
+    font-weight: 500;
+    line-height: 1.2;
+    transition: color 0.3s ease-out;
+}
+
+.stepLabel.activeLabel {
+    color: #1f2937;
+    font-weight: 600;
+}
+
+.stepLabel.completedLabel {
+    color: #059669;
+    font-weight: 600;
+}
+
+/* Status Footer */
+.statusFooter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background-color: #f0f9ff;
+    border-left: 4px solid #3b82f6;
+    border-radius: 6px;
+    gap: 12px;
+}
+
+.statusBadge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.eta {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
+    margin-left: auto;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        padding: 20px;
+        gap: 20px;
+    }
+
+    .stageHeader {
+        padding: 12px;
+        gap: 12px;
+    }
+
+    .stageIcon {
+        font-size: 24px;
+    }
+
+    .stageLabel {
+        font-size: 14px;
+    }
+
+    .statusMessage {
+        font-size: 12px;
+    }
+
+    .stageSteps {
+        gap: 8px;
+    }
+
+    .step {
+        min-width: 70px;
+    }
+
+    .stepDot {
+        width: 28px;
+        height: 28px;
+        font-size: 11px;
+    }
+
+    .stepLabel {
+        font-size: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 16px;
+        gap: 16px;
+    }
+
+    .stageSteps {
+        gap: 6px;
+    }
+
+    .step {
+        min-width: 60px;
+    }
+
+    .stepDot {
+        width: 24px;
+        height: 24px;
+        font-size: 10px;
+    }
+
+    .stepLabel {
+        font-size: 9px;
+    }
+
+    .stageLabel {
+        font-size: 13px;
+    }
+}

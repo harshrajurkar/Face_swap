@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import ProgressComponent from '../components/ProgressComponent';
 import styles from '../styles/Home.module.css';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
@@ -182,7 +183,7 @@ export default function HomePage() {
     }
 
     pollJob();
-    const intervalId = window.setInterval(pollJob, 2500);
+    const intervalId = window.setInterval(pollJob, 1200);
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
@@ -406,56 +407,86 @@ export default function HomePage() {
           </form>
 
           <aside className={`${styles.panel} ${styles.sidebar}`}>
-            <section className={`${styles.card} ${styles.statusCard}`}>
-              <div className={styles.statusHeader}>
-                <div>
-                  <h2 className={styles.sectionTitle}>Live Status</h2>
-                  <p className={styles.sectionText}>A clean view of what the current job is doing.</p>
+            {status !== 'idle' ? (
+              <ProgressComponent
+                progress={progress}
+                stage={serverStage}
+                statusMessage={serverStatusMessage}
+                status={status}
+                error={error}
+              />
+            ) : (
+              <section className={`${styles.card} ${styles.statusCard}`}>
+                <div className={styles.statusHeader}>
+                  <div>
+                    <h2 className={styles.sectionTitle}>Live Status</h2>
+                    <p className={styles.sectionText}>Ready to begin. Upload your images and click "Start Face Swap".</p>
+                  </div>
+                  <span className={styles.livePill}>Ready</span>
                 </div>
-                <span className={`${styles.livePill} ${status !== 'idle' && status !== 'failed' ? styles.livePillActive : ''}`}>
-                  {statusLabel}
-                </span>
-              </div>
+                <div className={styles.helper}>Select your source portrait and target image to get started.</div>
+              </section>
+            )}
 
-              <div className={styles.progressTrack}>
-                <div className={styles.progressFill} style={{ width: `${progress}%` }} />
-              </div>
+            {status === 'idle' && (
+              <section className={`${styles.card} ${styles.summaryCard}`}>
+                <div className={styles.sectionHeader}>
+                  <div>
+                    <h3 className={styles.sectionTitle}>Run Summary</h3>
+                    <p className={styles.sectionText}>Useful context for quick review and support.</p>
+                  </div>
+                </div>
 
-              <div className={styles.progressMeta}>
-                <span>{jobId ? `Job ${jobId.slice(0, 8)}${serverStage ? ` · ${serverStage}` : ''}` : 'No active job'}</span>
-                <span>{progress}%</span>
-              </div>
+                <div className={styles.summaryList}>
+                  <div className={styles.summaryRow}>
+                    <span>Job ID</span>
+                    <span className={styles.summaryValue}>{jobId || 'Not created yet'}</span>
+                  </div>
+                  <div className={styles.summaryRow}>
+                    <span>Enhancement</span>
+                    <span className={styles.summaryValue}>{jobEnhanceFace ? 'GFPGAN on' : 'Off'}</span>
+                  </div>
+                  <div className={styles.summaryRow}>
+                    <span>Session note</span>
+                    <span className={styles.summaryValue}>{jobPrompt || 'None'}</span>
+                  </div>
+                  <div className={styles.summaryRow}>
+                    <span>Best practice</span>
+                    <span className={styles.summaryValue}>Front-facing, sharp, evenly lit portraits</span>
+                  </div>
+                </div>
+              </section>
+            )}
 
-              {error ? <div className={styles.error}>{error}</div> : <div className={styles.helper}>{statusText}</div>}
-            </section>
+            {status !== 'idle' && status !== 'completed' && status !== 'failed' && (
+              <section className={`${styles.card} ${styles.summaryCard}`}>
+                <div className={styles.sectionHeader}>
+                  <div>
+                    <h3 className={styles.sectionTitle}>Run Summary</h3>
+                    <p className={styles.sectionText}>Details about this job.</p>
+                  </div>
+                </div>
 
-            <section className={`${styles.card} ${styles.summaryCard}`}>
-              <div className={styles.sectionHeader}>
-                <div>
-                  <h3 className={styles.sectionTitle}>Run Summary</h3>
-                  <p className={styles.sectionText}>Useful context for quick review and support.</p>
+                <div className={styles.summaryList}>
+                  <div className={styles.summaryRow}>
+                    <span>Job ID</span>
+                    <span className={styles.summaryValue}>{jobId ? jobId.slice(0, 16) + '...' : 'N/A'}</span>
+                  </div>
+                  <div className={styles.summaryRow}>
+                    <span>Enhancement</span>
+                    <span className={styles.summaryValue}>{jobEnhanceFace ? 'GFPGAN on' : 'Off'}</span>
+                  </div>
+                  <div className={styles.summaryRow}>
+                    <span>Current stage</span>
+                    <span className={styles.summaryValue}>{serverStage || 'Initializing'}</span>
+                  </div>
+                  <div className={styles.summaryRow}>
+                    <span>Progress</span>
+                    <span className={styles.summaryValue}>{progress}%</span>
+                  </div>
                 </div>
-              </div>
-
-              <div className={styles.summaryList}>
-                <div className={styles.summaryRow}>
-                  <span>Job ID</span>
-                  <span className={styles.summaryValue}>{jobId || 'Not created yet'}</span>
-                </div>
-                <div className={styles.summaryRow}>
-                  <span>Enhancement</span>
-                  <span className={styles.summaryValue}>{jobEnhanceFace ? 'GFPGAN on' : 'Off'}</span>
-                </div>
-                <div className={styles.summaryRow}>
-                  <span>Session note</span>
-                  <span className={styles.summaryValue}>{jobPrompt || 'None'}</span>
-                </div>
-                <div className={styles.summaryRow}>
-                  <span>Best practice</span>
-                  <span className={styles.summaryValue}>Front-facing, sharp, evenly lit portraits</span>
-                </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             <section className={`${styles.card} ${styles.resultCard}`}>
               <div className={styles.sectionHeader}>

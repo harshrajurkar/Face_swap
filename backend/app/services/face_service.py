@@ -155,11 +155,11 @@ class FaceService:
         target_image = self._read_image(target_path, "target")
 
         # Detect faces
-        print(f"[DEBUG] Detecting faces in source image...")
+        print(f"[DEBUG] Stage: face_detection - Detecting faces in source image...")
         source_faces = self.face_analyzer.get(source_image)
         print(f"[DEBUG] Found {len(source_faces)} face(s) in source image")
         
-        print(f"[DEBUG] Detecting faces in target image...")
+        print(f"[DEBUG] Stage: face_detection - Detecting faces in target image...")
         target_faces = self.face_analyzer.get(target_image)
         print(f"[DEBUG] Found {len(target_faces)} face(s) in target image")
 
@@ -177,26 +177,26 @@ class FaceService:
         self._validate_face_size(target_face, "Target")
 
         # -------- Stage 1: Extract region --------
-        print(f"[DEBUG] Stage 1: Extracting face region from target image...")
+        print(f"[DEBUG] Stage: face_extraction (progress: 25-35%) - Extracting face region from target image...")
         target_crop, region_info = self.region_processor.extract_face_region(
             target_image, target_face.bbox
         )
-        print(f"[DEBUG] Stage 1: Region extracted, shape={target_crop.shape}")
+        print(f"[DEBUG] Region extracted, shape={target_crop.shape}")
 
         if not self.region_processor.validate_face_region(target_crop):
             print(f"[ERROR] Face region validation failed")
             raise FaceSwapError("Face region too small.")
-        print(f"[DEBUG] Stage 1: Region validation passed")
+        print(f"[DEBUG] Region validation passed")
 
         # -------- Stage 2: Resize --------
-        print(f"[DEBUG] Stage 2: Resizing face region for processing...")
+        print(f"[DEBUG] Stage: face_extraction (progress: 30%) - Resizing face region for processing...")
         target_resized, resize_info = self.region_processor.resize_face_for_processing(target_crop)
-        print(f"[DEBUG] Stage 2: Resized to {target_resized.shape}")
+        print(f"[DEBUG] Resized to {target_resized.shape}")
 
         # -------- Stage 3: RE-DETECT FACE (CRITICAL FIX) --------
-        print(f"[DEBUG] Stage 3: Re-detecting face in resized region...")
+        print(f"[DEBUG] Stage: face_detection (progress: 35%) - Re-detecting face in resized region...")
         resized_faces = self.face_analyzer.get(target_resized)
-        print(f"[DEBUG] Stage 3: Found {len(resized_faces)} face(s) in resized image")
+        print(f"[DEBUG] Found {len(resized_faces)} face(s) in resized image")
 
         if not resized_faces:
             print(f"[ERROR] No face detected in resized region")
@@ -205,7 +205,7 @@ class FaceService:
         resized_target_face = self._largest_face(resized_faces)
 
         # -------- Stage 4: SWAP --------
-        print(f"[DEBUG] Stage 4: Performing face swap...")
+        print(f"[DEBUG] Stage: face_swapping (progress: 40-55%) - Performing face swap...")
         try:
             swapped_face_resized = self.face_swapper.get(
                 target_resized.copy(),
@@ -220,29 +220,29 @@ class FaceService:
         if swapped_face_resized is None:
             print(f"[ERROR] Face swapper returned None")
             raise FaceSwapError("Swap returned None.")
-        print(f"[DEBUG] Stage 4: Face swap completed")
+        print(f"[DEBUG] Face swap completed")
 
         swapped_face_resized = np.asarray(swapped_face_resized, dtype=np.uint8)
 
         # -------- Stage 5: SCALE BACK --------
-        print(f"[DEBUG] Stage 5: Scaling face back to original size...")
+        print(f"[DEBUG] Stage: blending (progress: 55-65%) - Scaling face back to original size...")
         swapped_face_scaled = self.region_processor.scale_face_back(
             swapped_face_resized,
             resize_info
         )
-        print(f"[DEBUG] Stage 5: Scaled to {swapped_face_scaled.shape}")
+        print(f"[DEBUG] Scaled to {swapped_face_scaled.shape}")
 
         # -------- Stage 6: BLEND --------
-        print(f"[DEBUG] Stage 6: Blending faces for seamless result...")
+        print(f"[DEBUG] Stage: blending (progress: 65-75%) - Blending faces for seamless result...")
         result_image = self.region_processor.blend_faces(
             target_image,
             swapped_face_scaled,
             region_info
         )
-        print(f"[DEBUG] Stage 6: Blending complete")
+        print(f"[DEBUG] Blending complete")
 
         # -------- Stage 7: SAVE --------
-        print(f"[DEBUG] Stage 7: Saving output image to {output_path}...")
+        print(f"[DEBUG] Stage: saving (progress: 75%) - Saving output image to {output_path}...")
         destination = Path(output_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
 

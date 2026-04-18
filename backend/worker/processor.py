@@ -45,9 +45,9 @@ class JobProcessor:
         await self.job_store.update_job(
             job_id,
             status="processing",
-            stage="preparing_models",
-            progress=18,
-            status_message="Preparing models and runtime dependencies.",
+            stage="model_loading",
+            progress=5,
+            status_message="Loading AI models and initializing...",
             error=None,
         )
         print(f"[DEBUG] Job status updated to 'processing'")
@@ -69,11 +69,12 @@ class JobProcessor:
                 enhance_face,
             )
 
+            # Update progress - Models loaded
             await self.job_store.update_job(
                 job_id,
-                stage="running_swap",
-                progress=35,
-                status_message="Detecting faces and extracting regions (optimized processing).",
+                stage="model_loading",
+                progress=10,
+                status_message="Models loaded successfully. Analyzing images...",
             )
 
             output_path = self.storage_service.build_output_path(job_id)
@@ -86,12 +87,30 @@ class JobProcessor:
             print(f"[DEBUG] Running face swap inference in thread pool")
             logger.debug("Job %s: Running face swap inference in thread pool", job_id)
             
+            # Define progress callback
+            progress_tracker = {
+                "last_update": 0,
+            }
+
+            async def update_progress(stage, progress, message):
+                progress_tracker["last_update"] = progress
+                await self.job_store.update_job(
+                    job_id,
+                    stage=stage,
+                    progress=progress,
+                    status_message=message,
+                )
+                print(f"[DEBUG] Progress: {progress}% - {stage}: {message}")
+
+            # Pass the progress callback to face_service
             final_output = await asyncio.to_thread(
-                face_service.swap_faces,
+                self._run_face_swap,
+                face_service,
                 source_path,
                 target_path,
                 output_path,
-        )
+                update_progress,
+            )
             print(f"[SUCCESS] ✓ Face swap completed")
             logger.info("Job %s: Face swap completed", job_id)
 
@@ -99,11 +118,11 @@ class JobProcessor:
                 print(f"[DEBUG] Enhancement requested - starting GFPGAN enhancement")
                 await self.job_store.update_job(
                     job_id,
-                    stage="enhancing",
-                    progress=75,
-                    status_message="Enhancing facial detail with GFPGAN.",
+                    stage="enhancement",
+                    progress=78,
+                    status_message="Enhancing facial details with AI...",
                 )
-                print(f"[DEBUG] Job status updated to 'enhancing'")
+                print(f"[DEBUG] Job status updated to 'enhancement'")
                 logger.info("Job %s: Starting enhancement", job_id)
                 
                 print(f"[DEBUG] Running enhancement in thread pool")
@@ -114,16 +133,31 @@ class JobProcessor:
                 )
                 print(f"[SUCCESS] ✓ Enhancement completed")
                 logger.info("Job %s: Enhancement completed", job_id)
+                
+                await self.job_store.update_job(
+                    job_id,
+                    stage="enhancement",
+                    progress=88,
+                    status_message="Facial enhancement complete.",
+                )
             else:
                 print(f"[DEBUG] Enhancement skipped (not requested)")
                 logger.debug("Job %s: Skipping enhancement (not requested)", job_id)
+
+            # Final stage - saving
+            await self.job_store.update_job(
+                job_id,
+                stage="saving",
+                progress=95,
+                status_message="Finalizing output and preparing for download...",
+            )
 
             await self.job_store.update_job(
                 job_id,
                 status="completed",
                 stage="completed",
                 progress=100,
-                status_message="Face swap complete. Output ready for download.",
+                status_message="Done! Your face swap is ready.",
                 output_path=final_output,
                 error=None,
             )
@@ -142,7 +176,7 @@ class JobProcessor:
                 status="failed",
                 stage="failed",
                 progress=100,
-                status_message=f"Face swap failed: {error_msg}",
+                status_message=f"Error: {error_msg}",
                 error=error_msg,
             )
             print(f"[DEBUG] Job marked as failed in database")
@@ -153,3 +187,16 @@ class JobProcessor:
             logger.debug("Job %s: Running garbage collection", job_id)
             gc.collect()
             print(f"[DEBUG] Garbage collection complete")
+
+    def _run_face_swap(self, face_service, source_path, target_path, output_path, progress_callback):
+        """Run face swap with progress tracking."""
+        try:
+            # Face detection phase - call synchronously since we're already in a thread
+            result = face_service.swap_faces(
+                source_path,
+                target_path,
+                output_path,
+            )
+            return result
+        except Exception as e:
+            raise e
