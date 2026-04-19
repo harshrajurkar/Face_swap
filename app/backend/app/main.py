@@ -41,3 +41,8 @@ async def get_output_file(filename: str):
     if not output_path.exists():
         raise HTTPException(status_code=404, detail="Output file not found.")
     return FileResponse(output_path)
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return {"status": "ok"}
