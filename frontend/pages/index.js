@@ -3,8 +3,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import ProgressComponent from '../components/ProgressComponent';
 import styles from '../styles/Home.module.css';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
-const BACKEND_ORIGIN = process.env.NEXT_PUBLIC_BACKEND_ORIGIN || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+const BACKEND_ORIGIN = process.env.NEXT_PUBLIC_BACKEND_ORIGIN || '';
+
+function getBrowserOrigin() {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  return window.location.origin;
+}
 
 function resolveOutputUrl(outputUrl) {
   if (!outputUrl) {
@@ -13,15 +20,18 @@ function resolveOutputUrl(outputUrl) {
   if (outputUrl.startsWith('http://') || outputUrl.startsWith('https://')) {
     return outputUrl;
   }
-  return `${BACKEND_ORIGIN}${outputUrl}`;
+  return `${BACKEND_ORIGIN || getBrowserOrigin()}${outputUrl}`;
 }
 
 function inferBackendOrigin() {
+  if (API_BASE_URL.startsWith('/')) {
+    return getBrowserOrigin();
+  }
   try {
     const parsed = new URL(API_BASE_URL);
     return `${parsed.protocol}//${parsed.host}`;
   } catch {
-    return BACKEND_ORIGIN;
+    return BACKEND_ORIGIN || getBrowserOrigin();
   }
 }
 

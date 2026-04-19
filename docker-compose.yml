@@ -11,7 +11,7 @@ services:
       retries: 5
 
   backend:
-    image: ai-face-swap-backend:cpu
+    image: 132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:backend
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -38,7 +38,7 @@ services:
       - ./backend/models:/app/models
 
   worker:
-    image: ai-face-swap-backend:cpu
+    image: 132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:backend
     command: python -m worker.worker
     environment:
       REDIS_URL: redis://redis:6379/0
@@ -58,6 +58,7 @@ services:
       - ./backend/models:/app/models
 
   frontend:
+    image: 132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:frontend
     build:
       context: ./frontend
     environment:
