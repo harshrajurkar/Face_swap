@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.venv/
+.venv311/
+backend/.venv/
+backend/.venv311/
+
+# Node
+frontend/node_modules/
+frontend/.next/
+
+# Runtime data
+logs/
+.run/
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/outputs/*
+!backend/outputs/.gitkeep
+backend/models/*
+!backend/models/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+backend/gfpgan/weights/

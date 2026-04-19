@@ -1,0 +1,36 @@
+#!/bin/bash
+set -euxo pipefail
+
+dnf update -y
+dnf install -y docker git jq awscli
+dnf install -y docker-compose-plugin || true
+
+systemctl enable docker
+systemctl start docker
+systemctl enable amazon-ssm-agent
+systemctl restart amazon-ssm-agent
+
+usermod -aG docker ec2-user
+
+mkdir -p ${app_dir}
+chown -R ec2-user:ec2-user ${app_dir}
+mkdir -p ${app_dir}/shared/uploads ${app_dir}/shared/outputs ${app_dir}/shared/models
+chown -R ec2-user:ec2-user ${app_dir}/shared
+
+cat >/etc/profile.d/app-env.sh <<EOF
+export AWS_REGION="${aws_region}"
+export APP_HOME="${app_dir}"
+export PROJECT_NAME="${project_name}"
+export APP_REPO_DIR="${app_dir}/app"
+EOF
+
+chmod +x /etc/profile.d/app-env.sh
+
+if [ ! -d "${app_dir}/app/.git" ]; then
+  sudo -u ec2-user git clone --branch "${app_repo_branch}" --single-branch "${app_repo_url}" "${app_dir}/app"
+else
+  cd "${app_dir}/app"
+  sudo -u ec2-user git fetch origin "${app_repo_branch}"
+  sudo -u ec2-user git checkout "${app_repo_branch}"
+  sudo -u ec2-user git pull --ff-only origin "${app_repo_branch}"
+fi
