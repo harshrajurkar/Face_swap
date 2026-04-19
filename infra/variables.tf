@@ -58,7 +58,7 @@ variable "private_data_subnet_cidrs" {
 variable "app_instance_type" {
   description = "EC2 instance type for the private application tier."
   type        = string
-  default     = "t3.large"
+  default     = "t3.small"
 }
 
 variable "app_root_volume_size" {
