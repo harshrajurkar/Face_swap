@@ -130,7 +130,7 @@ variable "app_repo_url" {
 variable "app_repo_branch" {
   description = "Git branch to clone on app instances."
   type        = string
-  default     = "version-1.0.02"
+  default     = "version-1.0.30"
 }
 
 variable "frontend_image_uri" {

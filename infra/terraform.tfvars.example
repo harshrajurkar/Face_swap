@@ -13,7 +13,7 @@ app_max_size          = 1
 app_desired_capacity  = 1
 app_directory         = "/opt/ai-face-swap"
 app_repo_url          = "https://github.com/harshrajurkar/Face_swap.git"
-app_repo_branch       = "version-1.0.02"
+app_repo_branch       = "version-1.0.30"
 
 frontend_image_uri = "132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:frontend"
 backend_image_uri  = "132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:backend"
