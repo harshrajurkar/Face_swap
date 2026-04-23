@@ -1,47 +1,57 @@
 #!/bin/bash
 set -euxo pipefail
 
+exec > >(tee /var/log/user-data.log)
+exec 2>&1
+
+echo "========== MINIMAL USER DATA START =========="
+echo "Started at: $(date)"
+
 export DEBIAN_FRONTEND=noninteractive
+APP_DIR="${app_dir}"
+APP_REPO_DIR="${app_dir}/app"
 
-apt-get update -y
-apt-get install -y docker.io git jq awscli docker-compose-plugin
+echo "APP_DIR=${app_dir}"
+echo "APP_REPO_DIR=${app_dir}/app"
+echo "REPO=${app_repo_url}@${app_repo_branch}"
 
-systemctl enable docker
-systemctl start docker
-systemctl enable snap.amazon-ssm-agent.timer || true
-systemctl start snap.amazon-ssm-agent.timer || true
-
-usermod -aG docker ubuntu
-
-mkdir -p ${app_dir}
-chown -R ec2-user:ec2-user ${app_dir}
-mkdir -p ${app_dir}/shared/uploads ${app_dir}/shared/outputs ${app_dir}/shared/models
-chown -R ec2-user:ec2-user ${app_dir}/shared
-
-cat >/etc/profile.d/app-env.sh <<EOF
-export AWS_REGION="${aws_region}"
-export APP_HOME="${app_dir}"
-export PROJECT_NAME="${project_name}"
-export APP_REPO_DIR="${app_dir}/app"
-EOF
-
-chmod +x /etc/profile.d/app-env.sh
-
-if [ ! -d "${app_dir}/app/.git" ]; then
-  sudo -u ec2-user git clone --branch "${app_repo_branch}" --single-branch "${app_repo_url}" "${app_dir}/app"
-else
-  cd "${app_dir}/app"
-  sudo -u ec2-user git fetch origin "${app_repo_branch}"
-  sudo -u ec2-user git checkout "${app_repo_branch}"
-  sudo -u ec2-user git pull --ff-only origin "${app_repo_branch}"
-fi
-
-# Wait for Docker to be ready
-until sudo systemctl is-active --quiet docker; do
-  sleep 1
+echo "Installing minimal prerequisites (git)..."
+for i in 1 2 3; do
+  apt-get update -y && apt-get install -y git && break
+  echo "Retry $i failed... retrying in 10s"
+  sleep 10
 done
 
-# Start the application containers
-cd "${app_dir}/app"
-sudo -u ec2-user docker compose -f docker-compose.aws.yml pull
-sudo -u ec2-user docker compose -f docker-compose.aws.yml up -d
+mkdir -p "$APP_DIR"
+
+if [ -d "$APP_REPO_DIR/.git" ]; then
+  echo "Refreshing existing repository..."
+  git -C "$APP_REPO_DIR" fetch --all --prune || true
+  git -C "$APP_REPO_DIR" checkout "${app_repo_branch}" || true
+  git -C "$APP_REPO_DIR" pull --ff-only origin "${app_repo_branch}" || true
+else
+  echo "Cloning repository..."
+  git clone --branch "${app_repo_branch}" --single-branch "${app_repo_url}" "$APP_REPO_DIR"
+fi
+
+if id ubuntu >/dev/null 2>&1; then
+  chown -R ubuntu:ubuntu "$APP_DIR"
+fi
+
+SCRIPT_PATH=""
+if [ -f "$APP_REPO_DIR/app/bootstrap-ec2-manual.sh" ]; then
+  SCRIPT_PATH="$APP_REPO_DIR/app/bootstrap-ec2-manual.sh"
+elif [ -f "$APP_REPO_DIR/bootstrap-ec2-manual.sh" ]; then
+  SCRIPT_PATH="$APP_REPO_DIR/bootstrap-ec2-manual.sh"
+fi
+
+if [ -n "$SCRIPT_PATH" ]; then
+  chmod +x "$SCRIPT_PATH"
+  ln -sf "$SCRIPT_PATH" "$APP_DIR/bootstrap-ec2-manual.sh"
+  echo "Manual script ready at: $APP_DIR/bootstrap-ec2-manual.sh"
+else
+  echo "WARNING: bootstrap-ec2-manual.sh not found in cloned repository."
+fi
+
+echo "========== MINIMAL USER DATA COMPLETE =========="
+echo "Completed at: $(date)"

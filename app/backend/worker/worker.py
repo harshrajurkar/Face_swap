@@ -25,6 +25,8 @@ async def run_worker() -> None:
     print("[DEBUG] QueueService initialized")
     processor = JobProcessor()
     print("[DEBUG] JobProcessor initialized")
+    await processor.preload_models()
+    print("[DEBUG] Model warmup step finished")
     concurrency = max(1, settings.worker_concurrency)
 
     logger.info(

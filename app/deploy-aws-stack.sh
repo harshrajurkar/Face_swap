@@ -11,6 +11,7 @@ S3_BUCKET_NAME=""
 REDIS_ENDPOINT=""
 FRONTEND_IMAGE_URI="132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:frontend"
 BACKEND_IMAGE_URI="132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:backend"
+FRONTEND_RUNTIME_IMAGE="${FRONTEND_IMAGE_URI}"
 EXECUTION_PROVIDER="CPUExecutionProvider"
 WORKER_CONCURRENCY="1"
 WORKER_JOB_TIMEOUT_SECONDS="900"
@@ -125,6 +126,7 @@ STORAGE_MODE=s3
 REDIS_URL=redis://${REDIS_ENDPOINT}:6379/0
 PUBLIC_BASE_URL=http://${ALB_DNS_NAME}
 FRONTEND_IMAGE_URI=${FRONTEND_IMAGE_URI}
+FRONTEND_RUNTIME_IMAGE=${FRONTEND_RUNTIME_IMAGE}
 BACKEND_IMAGE_URI=${BACKEND_IMAGE_URI}
 EXECUTION_PROVIDER=${EXECUTION_PROVIDER}
 WORKER_CONCURRENCY=${WORKER_CONCURRENCY}
@@ -137,8 +139,24 @@ EOF
 echo "Pulling latest repo changes..."
 git -C "$APP_REPO_DIR" pull --ff-only || true
 
+FRONTEND_CONTEXT=""
+if [[ -f "${APP_REPO_DIR}/frontend/Dockerfile" ]]; then
+  FRONTEND_CONTEXT="${APP_REPO_DIR}/frontend"
+elif [[ -f "${APP_REPO_DIR}/app/frontend/Dockerfile" ]]; then
+  FRONTEND_CONTEXT="${APP_REPO_DIR}/app/frontend"
+fi
+
+if [[ -n "$FRONTEND_CONTEXT" ]]; then
+  echo "Building frontend image with ALB-aware API URL..."
+  docker build \
+    -t ai-face-swap-frontend:bootstrap \
+    --build-arg NEXT_PUBLIC_API_BASE_URL=/api \
+    --build-arg NEXT_PUBLIC_BACKEND_ORIGIN="http://${ALB_DNS_NAME}" \
+    "$FRONTEND_CONTEXT"
+  sed -i 's|^FRONTEND_RUNTIME_IMAGE=.*$|FRONTEND_RUNTIME_IMAGE=ai-face-swap-frontend:bootstrap|' "$ENV_FILE"
+fi
+
 echo "Pulling images..."
-docker pull "$FRONTEND_IMAGE_URI"
 docker pull "$BACKEND_IMAGE_URI"
 
 echo "Starting compose stack..."

@@ -48,10 +48,10 @@ services:
       - ${APP_SHARED_DIR}/models:/app/models
 
   frontend:
-    image: ${FRONTEND_IMAGE_URI}
+    image: ${FRONTEND_RUNTIME_IMAGE}
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_BASE_URL}/api
+      NEXT_PUBLIC_API_BASE_URL: /api
       NEXT_PUBLIC_BACKEND_ORIGIN: ${PUBLIC_BASE_URL}
     depends_on:
       backend:

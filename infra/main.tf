@@ -21,8 +21,19 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-data "aws_ssm_parameter" "amazon_linux_2023_ami" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"]
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
 locals {
@@ -57,12 +68,26 @@ locals {
 
   bucket_name = "${local.name_prefix}-storage-${random_id.bucket_suffix.hex}"
 
+  public_base_url = "${var.enable_https && var.acm_certificate_arn != null ? "https" : "http"}://${aws_lb.app.dns_name}"
+  cors_origins    = jsonencode([local.public_base_url])
+
   user_data = base64encode(templatefile("${path.module}/templates/app_user_data.sh.tftpl", {
-    aws_region      = var.aws_region
-    project_name    = var.project_name
-    app_dir         = var.app_directory
-    app_repo_url    = var.app_repo_url
-    app_repo_branch = var.app_repo_branch
+    aws_region                 = var.aws_region
+    project_name               = var.project_name
+    app_dir                    = var.app_directory
+    app_repo_url               = var.app_repo_url
+    app_repo_branch            = var.app_repo_branch
+    frontend_image_uri         = var.frontend_image_uri
+    backend_image_uri          = var.backend_image_uri
+    execution_provider         = var.execution_provider
+    worker_concurrency         = var.worker_concurrency
+    worker_job_timeout_seconds = var.worker_job_timeout_seconds
+    worker_max_retries         = var.worker_max_retries
+    s3_bucket_name             = aws_s3_bucket.app_storage.bucket
+    redis_endpoint             = aws_elasticache_replication_group.redis.primary_endpoint_address
+    redis_port                 = var.redis_port
+    public_base_url            = local.public_base_url
+    cors_origins               = local.cors_origins
   }))
 }
 
@@ -465,7 +490,7 @@ resource "aws_lb_target_group" "frontend" {
 
   health_check {
     enabled             = true
-    path                = "/health"
+    path                = "/"
     matcher             = "200-399"
     interval            = 30
     timeout             = 5
@@ -561,7 +586,7 @@ resource "aws_lb_listener_rule" "api_https" {
 
 resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-lt-"
-  image_id      = data.aws_ssm_parameter.amazon_linux_2023_ami.value
+  image_id      = data.aws_ami.ubuntu.id
   instance_type = var.app_instance_type
   user_data     = local.user_data
 
@@ -597,36 +622,43 @@ resource "aws_launch_template" "app" {
   tags = local.common_tags
 }
 
-resource "aws_autoscaling_group" "app" {
-  name                      = "${local.name_prefix}-asg"
-  min_size                  = var.app_min_size
-  max_size                  = var.app_max_size
-  desired_capacity          = var.app_desired_capacity
-  health_check_type         = "ELB"
-  health_check_grace_period = 300
-  vpc_zone_identifier       = values(aws_subnet.private_app)[*].id
-  target_group_arns         = [aws_lb_target_group.frontend.arn, aws_lb_target_group.backend.arn]
 
-  launch_template {
-    id      = aws_launch_template.app.id
-    version = "$Latest"
+# Single EC2 instance for debugging
+resource "aws_instance" "app_debug" {
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = var.app_instance_type
+  subnet_id                   = values(aws_subnet.private_app)[0].id
+  vpc_security_group_ids      = [aws_security_group.app.id]
+  iam_instance_profile        = aws_iam_instance_profile.app_ec2.name
+  user_data_base64            = local.user_data
+  user_data_replace_on_change = true
+
+  root_block_device {
+    volume_size = var.app_root_volume_size
+    volume_type = "gp3"
+    encrypted   = true
   }
 
-  tag {
-    key                 = "Name"
-    value               = "${local.name_prefix}-app"
-    propagate_at_launch = true
-  }
+  depends_on = [
+    aws_lb.app,
+    aws_elasticache_replication_group.redis,
+    aws_s3_bucket.app_storage,
+  ]
 
-  tag {
-    key                 = "Project"
-    value               = var.project_name
-    propagate_at_launch = true
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-debug"
+    Tier = "application"
+  })
+}
 
-  tag {
-    key                 = "Environment"
-    value               = var.environment
-    propagate_at_launch = true
-  }
+resource "aws_lb_target_group_attachment" "frontend_app_debug" {
+  target_group_arn = aws_lb_target_group.frontend.arn
+  target_id        = aws_instance.app_debug.id
+  port             = var.frontend_container_port
+}
+
+resource "aws_lb_target_group_attachment" "backend_app_debug" {
+  target_group_arn = aws_lb_target_group.backend.arn
+  target_id        = aws_instance.app_debug.id
+  port             = var.backend_container_port
 }

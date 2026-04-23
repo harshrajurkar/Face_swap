@@ -1,7 +1,6 @@
 import asyncio
 import gc
 import logging
-import asyncio
 
 from app.config import get_settings
 from app.services.enhancement_service import EnhancementService
@@ -29,6 +28,22 @@ class JobProcessor:
         self.job_store = JobStore(self.settings)
         print("[DEBUG] JobStore initialized")
         print("[DEBUG] JobProcessor.__init__() complete\n")
+
+    async def preload_models(self, retries: int = 3) -> None:
+        """Best-effort model warmup to reduce first-job failures."""
+        for attempt in range(1, retries + 1):
+            try:
+                print(f"[DEBUG] Preloading face swap models (attempt {attempt}/{retries})...")
+                await asyncio.to_thread(self._get_face_service)
+                print("[DEBUG] Preloading GFPGAN model...")
+                await asyncio.to_thread(self.enhancement_service._ensure_model)
+                print("[SUCCESS] Model preload completed")
+                return
+            except Exception as exc:  # noqa: BLE001
+                if attempt == retries:
+                    logger.warning("Model preload failed after %s attempts: %s", retries, exc)
+                    return
+                await asyncio.sleep(5 * attempt)
 
     def _get_face_service(self) -> FaceService:
         if self.face_service is None:

@@ -17,8 +17,7 @@ ai-face-swap-platform/
     ├── main.tf
     ├── variables.tf
     ├── output.tf
-    ├── terraform.tfvars.example
-    ├── .terraform.lock.hcl
+    ├── tofu.auto.tfvars.example
     └── templates/
 ```
 

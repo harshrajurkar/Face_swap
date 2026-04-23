@@ -29,9 +29,8 @@ app/backend/outputs/*
 app/backend/models/*
 !app/backend/models/.gitkeep
 
-# OpenTofu / Terraform local artifacts
+# OpenTofu local artifacts
 infra/.terraform/
-infra/terraform.tfstate
-infra/terraform.tfstate.*
+infra/*.tfstate
+infra/*.tfstate.*
 infra/*.tfvars
-

@@ -38,10 +38,10 @@ output "backend_target_group_arn" {
   value       = aws_lb_target_group.backend.arn
 }
 
-output "autoscaling_group_name" {
-  description = "Auto Scaling Group name for the application tier."
-  value       = aws_autoscaling_group.app.name
-}
+# output "autoscaling_group_name" {
+#   description = "Auto Scaling Group name for the application tier."
+#   value       = aws_autoscaling_group.app.name
+# }
 
 output "app_instance_profile_name" {
   description = "IAM instance profile attached to app EC2 instances."
@@ -76,4 +76,19 @@ output "frontend_image_uri" {
 output "backend_image_uri" {
   description = "Backend image URI used by backend and worker."
   value       = var.backend_image_uri
+}
+
+output "app_instance_id" {
+  description = "Application EC2 instance ID."
+  value       = aws_instance.app_debug.id
+}
+
+output "app_instance_private_ip" {
+  description = "Application EC2 private IP."
+  value       = aws_instance.app_debug.private_ip
+}
+
+output "public_base_url" {
+  description = "Public base URL served by ALB."
+  value       = "${var.enable_https && var.acm_certificate_arn != null ? "https" : "http"}://${aws_lb.app.dns_name}"
 }
