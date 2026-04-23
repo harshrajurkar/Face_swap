@@ -16,6 +16,9 @@ class StorageService:
     def _use_s3(self) -> bool:
         return self.settings.storage_mode.lower() == "s3" and bool(self.settings.s3_bucket_name)
 
+    def is_s3_enabled(self) -> bool:
+        return self._use_s3()
+
     def _uploads_key(self, filename: str) -> str:
         return f"{self.settings.s3_uploads_prefix.strip('/')}/{filename}"
 

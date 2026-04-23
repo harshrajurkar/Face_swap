@@ -1,45 +1,33 @@
 # AI Face Swap Platform
 
-This repository is now organized as a single monorepo for both the product code and the AWS/OpenTofu infrastructure.
+This repository is organized as a single monorepo for both the app and OpenTofu infrastructure.
 
 ## Structure
 
 ```text
-ai-face-swap-platform/
-├── app/
-│   ├── backend/
-│   ├── frontend/
-│   ├── docker-compose.yml
-│   ├── docker-compose.aws.yml
-│   ├── deploy-aws-stack.sh
-│   └── README.md
-└── infra/
-    ├── main.tf
-    ├── variables.tf
-    ├── output.tf
-    ├── tofu.auto.tfvars.example
-    └── templates/
+repo-clean/
++-- app/
+�   +-- backend/
+�   +-- frontend/
+�   +-- docker-compose.yml
+�   +-- docker-compose.aws.yml
+�   +-- docker-compose.aws-build.yml
+�   +-- deploy-ec2-single.sh
+�   +-- README.md
++-- infra/
+    +-- main.tf
+    +-- variables.tf
+    +-- output.tf
+    +-- tofu.auto.tfvars.example
+    +-- templates/
 ```
 
-## What goes where
+## What Goes Where
 
-- `app/`: actual application source code, local Docker Compose setup, and the AWS deployment compose/script
-- `infra/`: OpenTofu code for AWS networking, ALB, EC2, Redis, S3, IAM, and bootstrapping
+- `app/`: application code, compose files, and the single EC2 deployment script
+- `infra/`: OpenTofu code for VPC, ALB, EC2, ElastiCache, S3, IAM, and user-data bootstrapping
 
-## How to use it
-
-### Work on the application
-
-Use the app folder:
-
-```bash
-cd app
-docker compose up --build
-```
-
-### Work on the infrastructure
-
-Use the infra folder:
+## Infra Workflow (OpenTofu)
 
 ```bash
 cd infra
@@ -48,17 +36,16 @@ tofu plan
 tofu apply
 ```
 
-## Deployment flow
+## EC2 Workflow
 
-1. Push app changes from `app/` to GitHub
-2. Rebuild and push the Docker images from `app/`
-3. Run OpenTofu from `infra/`
-4. Connect to the EC2 instance with SSM
-5. Run `app/deploy-aws-stack.sh` on the instance
+After `tofu apply` (or after replacing the instance), connect to EC2 and run:
 
-## Why this layout is good
+```bash
+sudo bash /opt/scripts/deploy-ec2-single.sh
+```
 
-- one repository for the complete project story
-- clearer separation between product code and infrastructure
-- easier CI/CD later
-- easier to explain in interviews
+The script installs Docker, builds backend/frontend images from Dockerfiles, starts backend + worker + frontend, and prints:
+
+```text
+UI is running on <url>
+```

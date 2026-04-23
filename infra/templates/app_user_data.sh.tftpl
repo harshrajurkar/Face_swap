@@ -1,57 +1,127 @@
-#!/bin/bash
-set -euxo pipefail
+#!/usr/bin/env bash
+set -euo pipefail
+exec > >(tee -a /var/log/user-data.log) 2>&1
 
-exec > >(tee /var/log/user-data.log)
-exec 2>&1
+echo "========== USER DATA START =========="
+echo "Started: $(date -u)"
 
-echo "========== MINIMAL USER DATA START =========="
-echo "Started at: $(date)"
+APP_HOME="${app_dir}"
+SCRIPTS_DIR="/opt/scripts"
+SCRIPT_PATH="$SCRIPTS_DIR/deploy-ec2-single.sh"
 
+mkdir -p "$APP_HOME" "$SCRIPTS_DIR"
+
+cat > "$SCRIPT_PATH" <<'SCRIPT_EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+AWS_REGION="${aws_region}"
+APP_HOME="${app_dir}"
+APP_REPO_DIR="$APP_HOME/app"
+COMPOSE_FILE="$APP_HOME/app/docker-compose.aws-build.yml"
+ENV_FILE="$APP_HOME/.env.aws"
+ALB_DNS_NAME="$(echo "${public_base_url}" | sed -E 's#^https?://##')"
+S3_BUCKET_NAME="${s3_bucket_name}"
+REDIS_ENDPOINT="${redis_endpoint}"
+EXECUTION_PROVIDER="${execution_provider}"
+WORKER_CONCURRENCY="${worker_concurrency}"
+WORKER_JOB_TIMEOUT_SECONDS="${worker_job_timeout_seconds}"
+WORKER_MAX_RETRIES="${worker_max_retries}"
+GIT_BRANCH="${app_repo_branch}"
+REPO_URL="${app_repo_url}"
+ACCOUNT_ID="132690414014"
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Run as root: sudo bash /opt/scripts/deploy-ec2-single.sh" >&2
+  exit 1
+fi
+
+require_cmd() {
+  cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "Missing command: $cmd" >&2
+    exit 1
+  fi
+}
+
+echo "Installing Docker and dependencies..."
 export DEBIAN_FRONTEND=noninteractive
-APP_DIR="${app_dir}"
-APP_REPO_DIR="${app_dir}/app"
-
-echo "APP_DIR=${app_dir}"
-echo "APP_REPO_DIR=${app_dir}/app"
-echo "REPO=${app_repo_url}@${app_repo_branch}"
-
-echo "Installing minimal prerequisites (git)..."
 for i in 1 2 3; do
-  apt-get update -y && apt-get install -y git && break
-  echo "Retry $i failed... retrying in 10s"
+  if apt-get update -y && apt-get install -y docker.io docker-compose awscli git jq; then
+    break
+  fi
+  echo "Install attempt $i failed; retrying in 10s..."
   sleep 10
 done
 
-mkdir -p "$APP_DIR"
+require_cmd docker
+require_cmd aws
+require_cmd git
+require_cmd docker-compose
+
+systemctl enable docker
+systemctl start docker
+
+APP_SHARED_DIR="$APP_HOME/shared"
+mkdir -p "$APP_HOME" "$APP_SHARED_DIR/uploads" "$APP_SHARED_DIR/outputs" "$APP_SHARED_DIR/models"
 
 if [ -d "$APP_REPO_DIR/.git" ]; then
-  echo "Refreshing existing repository..."
-  git -C "$APP_REPO_DIR" fetch --all --prune || true
-  git -C "$APP_REPO_DIR" checkout "${app_repo_branch}" || true
-  git -C "$APP_REPO_DIR" pull --ff-only origin "${app_repo_branch}" || true
+  echo "Updating existing repo..."
+  git -C "$APP_REPO_DIR" fetch origin "$GIT_BRANCH"
+  git -C "$APP_REPO_DIR" checkout "$GIT_BRANCH"
+  git -C "$APP_REPO_DIR" pull --ff-only origin "$GIT_BRANCH"
 else
-  echo "Cloning repository..."
-  git clone --branch "${app_repo_branch}" --single-branch "${app_repo_url}" "$APP_REPO_DIR"
+  echo "Cloning repo..."
+  rm -rf "$APP_REPO_DIR"
+  git clone --branch "$GIT_BRANCH" --single-branch "$REPO_URL" "$APP_REPO_DIR"
 fi
 
-if id ubuntu >/dev/null 2>&1; then
-  chown -R ubuntu:ubuntu "$APP_DIR"
-fi
-
-SCRIPT_PATH=""
-if [ -f "$APP_REPO_DIR/app/bootstrap-ec2-manual.sh" ]; then
-  SCRIPT_PATH="$APP_REPO_DIR/app/bootstrap-ec2-manual.sh"
-elif [ -f "$APP_REPO_DIR/bootstrap-ec2-manual.sh" ]; then
-  SCRIPT_PATH="$APP_REPO_DIR/bootstrap-ec2-manual.sh"
-fi
-
-if [ -n "$SCRIPT_PATH" ]; then
-  chmod +x "$SCRIPT_PATH"
-  ln -sf "$SCRIPT_PATH" "$APP_DIR/bootstrap-ec2-manual.sh"
-  echo "Manual script ready at: $APP_DIR/bootstrap-ec2-manual.sh"
+if [ -f "$APP_REPO_DIR/docker-compose.aws-build.yml" ]; then
+  COMPOSE_FILE="$APP_REPO_DIR/docker-compose.aws-build.yml"
+elif [ -f "$APP_REPO_DIR/app/docker-compose.aws-build.yml" ]; then
+  COMPOSE_FILE="$APP_REPO_DIR/app/docker-compose.aws-build.yml"
 else
-  echo "WARNING: bootstrap-ec2-manual.sh not found in cloned repository."
+  echo "docker-compose.aws-build.yml not found in repo." >&2
+  exit 1
 fi
 
-echo "========== MINIMAL USER DATA COMPLETE =========="
-echo "Completed at: $(date)"
+cat > "$ENV_FILE" <<EOF
+AWS_REGION=${aws_region}
+S3_BUCKET_NAME=${s3_bucket_name}
+S3_UPLOADS_PREFIX=uploads
+S3_OUTPUTS_PREFIX=outputs
+STORAGE_MODE=s3
+REDIS_URL=redis://${redis_endpoint}:${redis_port}/0
+PUBLIC_BASE_URL=${public_base_url}
+EXECUTION_PROVIDER=${execution_provider}
+WORKER_CONCURRENCY=${worker_concurrency}
+WORKER_JOB_TIMEOUT_SECONDS=${worker_job_timeout_seconds}
+WORKER_MAX_RETRIES=${worker_max_retries}
+APP_SHARED_DIR=$APP_HOME/shared
+CORS_ORIGINS=${cors_origins}
+EOF
+
+chown root:root "$ENV_FILE"
+chmod 600 "$ENV_FILE"
+
+echo "Logging into ECR..."
+aws ecr get-login-password --region "$AWS_REGION" \
+  | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+
+echo "Building images..."
+docker-compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build backend frontend
+
+echo "Starting services..."
+docker-compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --remove-orphans
+
+echo "Current service status:"
+docker-compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
+
+echo "UI is running on ${public_base_url}"
+SCRIPT_EOF
+
+chmod 755 "$SCRIPT_PATH"
+
+echo "Script created at $SCRIPT_PATH"
+echo "Run it with: sudo bash $SCRIPT_PATH"
+echo "========== USER DATA END =========="

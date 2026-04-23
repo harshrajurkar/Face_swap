@@ -87,7 +87,10 @@ class JobStore:
         if output_path is not None:
             existing["output_path"] = output_path
             await self.storage.publish_output(job_id, output_path)
-            existing["output_url"] = self.storage.build_output_url(job_id, existing.get("response_base_url"))
+            if self.storage.is_s3_enabled():
+                existing["output_url"] = self.storage.build_presigned_output_url(f"{job_id}.png")
+            else:
+                existing["output_url"] = self.storage.build_output_url(job_id, existing.get("response_base_url"))
         if error is not None or status == "failed":
             existing["error"] = error
         existing["updated_at"] = datetime.now(UTC).isoformat()
