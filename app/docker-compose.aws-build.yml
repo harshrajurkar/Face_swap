@@ -1,0 +1,66 @@
+services:
+  backend:
+    image: ai-face-swap-backend:server-build
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      EXECUTION_PROVIDER: ${EXECUTION_PROVIDER}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY}
+      WORKER_JOB_TIMEOUT_SECONDS: ${WORKER_JOB_TIMEOUT_SECONDS}
+      WORKER_MAX_RETRIES: ${WORKER_MAX_RETRIES}
+      STORAGE_MODE: ${STORAGE_MODE}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      S3_UPLOADS_PREFIX: ${S3_UPLOADS_PREFIX}
+      S3_OUTPUTS_PREFIX: ${S3_OUTPUTS_PREFIX}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${APP_SHARED_DIR}/uploads:/app/uploads
+      - ${APP_SHARED_DIR}/outputs:/app/outputs
+      - ${APP_SHARED_DIR}/models:/app/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    image: ai-face-swap-backend:server-build
+    command: python -m worker.worker
+    restart: unless-stopped
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      EXECUTION_PROVIDER: ${EXECUTION_PROVIDER}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY}
+      WORKER_JOB_TIMEOUT_SECONDS: ${WORKER_JOB_TIMEOUT_SECONDS}
+      WORKER_MAX_RETRIES: ${WORKER_MAX_RETRIES}
+      STORAGE_MODE: ${STORAGE_MODE}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      S3_UPLOADS_PREFIX: ${S3_UPLOADS_PREFIX}
+      S3_OUTPUTS_PREFIX: ${S3_OUTPUTS_PREFIX}
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ${APP_SHARED_DIR}/uploads:/app/uploads
+      - ${APP_SHARED_DIR}/outputs:/app/outputs
+      - ${APP_SHARED_DIR}/models:/app/models
+
+  frontend:
+    image: ai-face-swap-frontend:server-build
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: /api
+        NEXT_PUBLIC_BACKEND_ORIGIN: ${PUBLIC_BASE_URL}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"

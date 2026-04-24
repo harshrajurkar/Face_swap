@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    image: 132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:backend
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      EXECUTION_PROVIDER: CPUExecutionProvider
+      WORKER_CONCURRENCY: 1
+      WORKER_JOB_TIMEOUT_SECONDS: 900
+      WORKER_MAX_RETRIES: 2
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/outputs:/app/outputs
+      - ./backend/models:/app/models
+
+  worker:
+    image: 132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:backend
+    command: python -m worker.worker
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      EXECUTION_PROVIDER: CPUExecutionProvider
+      WORKER_CONCURRENCY: 1
+      WORKER_JOB_TIMEOUT_SECONDS: 900
+      WORKER_MAX_RETRIES: 2
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/outputs:/app/outputs
+      - ./backend/models:/app/models
+
+  frontend:
+    image: 132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api
+      NEXT_PUBLIC_BACKEND_ORIGIN: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
