@@ -1,5 +1,7 @@
+import asyncio
 from pathlib import Path
-from urllib.parse import quote
+from typing import BinaryIO
+from urllib.parse import quote, urlparse
 
 import aiofiles
 import boto3
@@ -25,62 +27,74 @@ class StorageService:
     def _outputs_key(self, filename: str) -> str:
         return f"{self.settings.s3_outputs_prefix.strip('/')}/{filename}"
 
-    def _upload_file_to_s3(self, local_path: str, key: str, content_type: str | None = None) -> None:
-        extra_args = {}
-        if content_type:
-            extra_args["ContentType"] = content_type
+    def _to_s3_uri(self, key: str) -> str:
+        return f"s3://{self.settings.s3_bucket_name}/{key.lstrip('/')}"
 
+    def _parse_s3_reference(self, reference: str) -> tuple[str, str]:
+        parsed = urlparse(reference)
+        if parsed.scheme == "s3":
+            return parsed.netloc, parsed.path.lstrip("/")
+
+        if not self.settings.s3_bucket_name:
+            raise ValueError("S3 bucket is required when storage_mode is s3.")
+        return self.settings.s3_bucket_name, reference.lstrip("/")
+
+    def _upload_file_to_s3(self, local_path: str, key: str, content_type: str | None = None) -> None:
+        extra_args = {"ContentType": content_type} if content_type else None
         with open(local_path, "rb") as file_handle:
-            if extra_args:
-                self.s3_client.upload_fileobj(
-                    file_handle,
-                    self.settings.s3_bucket_name,
-                    key,
-                    ExtraArgs=extra_args,
-                )
-            else:
-                self.s3_client.upload_fileobj(
-                    file_handle,
-                    self.settings.s3_bucket_name,
-                    key,
-                )
+            self.s3_client.upload_fileobj(
+                file_handle,
+                self.settings.s3_bucket_name,
+                key,
+                ExtraArgs=extra_args or {},
+            )
+
+    def _upload_fileobj_to_s3(self, file_obj: BinaryIO, key: str, content_type: str | None = None) -> None:
+        file_obj.seek(0)
+        extra_args = {"ContentType": content_type} if content_type else None
+        self.s3_client.upload_fileobj(
+            file_obj,
+            self.settings.s3_bucket_name,
+            key,
+            ExtraArgs=extra_args or {},
+        )
+
+    def _download_file_from_s3(self, bucket: str, key: str, destination: Path) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("wb") as file_handle:
+            self.s3_client.download_fileobj(bucket, key, file_handle)
 
     async def save_upload(self, job_id: str, kind: str, upload: UploadFile) -> str:
-        print(f"[DEBUG] Saving {kind} upload for job {job_id}")
-        print(f"[DEBUG] Upload filename: {upload.filename}, content_type: {upload.content_type}")
-        
         extension = Path(upload.filename or "").suffix.lower()
-        print(f"[DEBUG] File extension: {extension}")
-        
         if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
-            print(f"[ERROR] Invalid file extension: {extension}")
             raise ValueError("Only .jpg, .jpeg, .png, and .webp images are supported.")
 
-        destination = self.settings.uploads_dir / f"{job_id}_{kind}{extension}"
-        print(f"[DEBUG] Saving to: {destination}")
-        
+        filename = f"{job_id}_{kind}{extension}"
+        if self._use_s3():
+            key = self._uploads_key(filename)
+            await asyncio.to_thread(self._upload_fileobj_to_s3, upload.file, key, upload.content_type)
+            await upload.close()
+            return self._to_s3_uri(key)
+
+        destination = self.settings.uploads_dir / filename
         async with aiofiles.open(destination, "wb") as file_handle:
-            bytes_written = 0
             while True:
                 chunk = await upload.read(1024 * 1024)
                 if not chunk:
                     break
                 await file_handle.write(chunk)
-                bytes_written += len(chunk)
-                print(f"[DEBUG] Written {bytes_written} bytes...")
-        
         await upload.close()
-        resolved_path = str(destination.resolve())
-        print(f"[DEBUG] Upload complete: {resolved_path}")
+        return str(destination.resolve())
 
-        if self._use_s3():
-            await self._upload_to_s3_async(
-                resolved_path,
-                self._uploads_key(destination.name),
-                upload.content_type,
-            )
+    async def materialize_input(self, job_id: str, kind: str, reference: str) -> str:
+        if not self._use_s3():
+            return reference
 
-        return resolved_path
+        bucket, key = self._parse_s3_reference(reference)
+        extension = Path(key).suffix or ".bin"
+        destination = self.settings.uploads_dir / f"{job_id}_{kind}_input{extension}"
+        await asyncio.to_thread(self._download_file_from_s3, bucket, key, destination)
+        return str(destination.resolve())
 
     def build_output_path(self, job_id: str) -> str:
         return str((self.settings.outputs_dir / f"{job_id}.png").resolve())
@@ -91,20 +105,21 @@ class StorageService:
             return f"{response_base_url.rstrip('/')}{relative}"
         return relative
 
+    def build_output_object_reference(self, job_id: str) -> str:
+        if not self._use_s3():
+            return self.build_output_path(job_id)
+        return self._to_s3_uri(self._outputs_key(f"{job_id}.png"))
+
     async def publish_output(self, job_id: str, output_path: str) -> None:
         if not self._use_s3():
             return
 
-        await self._upload_to_s3_async(
+        await asyncio.to_thread(
+            self._upload_file_to_s3,
             output_path,
             self._outputs_key(f"{job_id}.png"),
             "image/png",
         )
-
-    async def _upload_to_s3_async(self, local_path: str, key: str, content_type: str | None = None) -> None:
-        import asyncio
-
-        await asyncio.to_thread(self._upload_file_to_s3, local_path, key, content_type)
 
     def build_presigned_output_url(self, filename: str, expires_in: int = 3600) -> str:
         if not self._use_s3():

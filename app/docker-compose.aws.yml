@@ -15,10 +15,6 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
     ports:
       - "8000:8000"
-    volumes:
-      - ${APP_SHARED_DIR}/uploads:/app/uploads
-      - ${APP_SHARED_DIR}/outputs:/app/outputs
-      - ${APP_SHARED_DIR}/models:/app/models
     healthcheck:
       test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
       interval: 15s
@@ -42,10 +38,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    volumes:
-      - ${APP_SHARED_DIR}/uploads:/app/uploads
-      - ${APP_SHARED_DIR}/outputs:/app/outputs
-      - ${APP_SHARED_DIR}/models:/app/models
 
   frontend:
     image: ${FRONTEND_RUNTIME_IMAGE}

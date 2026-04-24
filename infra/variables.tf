@@ -67,24 +67,6 @@ variable "app_root_volume_size" {
   default     = 50
 }
 
-variable "app_min_size" {
-  description = "Minimum number of app instances."
-  type        = number
-  default     = 1
-}
-
-variable "app_max_size" {
-  description = "Maximum number of app instances."
-  type        = number
-  default     = 1
-}
-
-variable "app_desired_capacity" {
-  description = "Desired number of app instances."
-  type        = number
-  default     = 1
-}
-
 variable "frontend_container_port" {
   description = "Frontend container port."
   type        = number
@@ -115,6 +97,12 @@ variable "redis_engine_version" {
   default     = "7.1"
 }
 
+variable "redis_use_tls" {
+  description = "Enable TLS-in-transit for ElastiCache and generate rediss:// runtime URLs."
+  type        = bool
+  default     = true
+}
+
 variable "app_directory" {
   description = "Directory on the EC2 instances where deployment assets will live."
   type        = string
@@ -124,25 +112,40 @@ variable "app_directory" {
 variable "app_repo_url" {
   description = "Public Git repository URL that should be cloned onto app instances."
   type        = string
-  default     = "https://github.com/harshrajurkar/Face_swap.git"
+  default     = null
+
+  validation {
+    condition     = var.app_repo_url != null && trim(var.app_repo_url) != ""
+    error_message = "Provide app_repo_url in tofu.auto.tfvars."
+  }
 }
 
 variable "app_repo_branch" {
   description = "Git branch to clone on app instances."
   type        = string
-  default     = "version-1.0.30"
+  default     = "main"
 }
 
 variable "frontend_image_uri" {
   description = "Frontend ECR image URI."
   type        = string
-  default     = "132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:frontend"
+  default     = null
+
+  validation {
+    condition     = var.frontend_image_uri != null && trim(var.frontend_image_uri) != ""
+    error_message = "Provide frontend_image_uri in tofu.auto.tfvars."
+  }
 }
 
 variable "backend_image_uri" {
   description = "Backend ECR image URI used by both backend and worker."
   type        = string
-  default     = "132690414014.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap:backend"
+  default     = null
+
+  validation {
+    condition     = var.backend_image_uri != null && trim(var.backend_image_uri) != ""
+    error_message = "Provide backend_image_uri in tofu.auto.tfvars."
+  }
 }
 
 variable "execution_provider" {

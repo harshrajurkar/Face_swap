@@ -70,6 +70,8 @@ locals {
 
   public_base_url = "${var.enable_https && var.acm_certificate_arn != null ? "https" : "http"}://${aws_lb.app.dns_name}"
   cors_origins    = jsonencode([local.public_base_url])
+  redis_scheme    = var.redis_use_tls ? "rediss" : "redis"
+  redis_url       = "${local.redis_scheme}://${aws_elasticache_replication_group.redis.primary_endpoint_address}:${var.redis_port}/0"
 
   user_data = base64encode(templatefile("${path.module}/templates/app_user_data.sh.tftpl", {
     aws_region                 = var.aws_region
@@ -84,8 +86,7 @@ locals {
     worker_job_timeout_seconds = var.worker_job_timeout_seconds
     worker_max_retries         = var.worker_max_retries
     s3_bucket_name             = aws_s3_bucket.app_storage.bucket
-    redis_endpoint             = aws_elasticache_replication_group.redis.primary_endpoint_address
-    redis_port                 = var.redis_port
+    redis_url                  = local.redis_url
     public_base_url            = local.public_base_url
     cors_origins               = local.cors_origins
   }))
@@ -385,7 +386,7 @@ resource "aws_elasticache_replication_group" "redis" {
   subnet_group_name          = aws_elasticache_subnet_group.redis.name
   security_group_ids         = [aws_security_group.redis.id]
   at_rest_encryption_enabled = true
-  transit_encryption_enabled = false
+  transit_encryption_enabled = var.redis_use_tls
   auto_minor_version_upgrade = true
 
   tags = local.common_tags
@@ -583,45 +584,6 @@ resource "aws_lb_listener_rule" "api_https" {
     }
   }
 }
-
-resource "aws_launch_template" "app" {
-  name_prefix   = "${local.name_prefix}-lt-"
-  image_id      = data.aws_ami.ubuntu.id
-  instance_type = var.app_instance_type
-  user_data     = local.user_data
-
-  iam_instance_profile {
-    arn = aws_iam_instance_profile.app_ec2.arn
-  }
-
-  network_interfaces {
-    associate_public_ip_address = false
-    security_groups             = [aws_security_group.app.id]
-  }
-
-  block_device_mappings {
-    device_name = "/dev/xvda"
-
-    ebs {
-      volume_size           = var.app_root_volume_size
-      volume_type           = "gp3"
-      encrypted             = true
-      delete_on_termination = true
-    }
-  }
-
-  tag_specifications {
-    resource_type = "instance"
-
-    tags = merge(local.common_tags, {
-      Name = "${local.name_prefix}-app"
-      Tier = "application"
-    })
-  }
-
-  tags = local.common_tags
-}
-
 
 # Single EC2 instance for debugging
 resource "aws_instance" "app_debug" {
