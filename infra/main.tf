@@ -646,8 +646,9 @@ resource "aws_instance" "app_debug" {
   ]
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-debug"
-    Tier = "application"
+  Name        = "${local.name_prefix}-app-debug"
+  Tier        = "application"
+  DeployTarget = "face-swap-dev"
   })
 }
 
