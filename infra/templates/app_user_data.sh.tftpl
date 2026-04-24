@@ -34,8 +34,12 @@ cd /opt/ai-face-swap
 
 # Clone repo (first time)
 if [ ! -d "app" ]; then
-  git clone https://github.com/harshrajurkar/Face_swap.git app
+  git clone -b main https://github.com/harshrajurkar/Face_swap.git app
 fi
 
+# Always pull latest code
+cd /opt/ai-face-swap/app
+git pull origin main
+
 # Copy AWS-specific compose file
-cp app/docker-compose.aws.yml app/docker-compose.yml
+cp docker-compose.aws.yml docker-compose.yml
