@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 env:
-  AWS_REGION: ap-south-1
+  AWS_REGION: us-east-1
   ACCOUNT_ID: 132690414014
   ECR_BACKEND: ai-face-swap-backend
   ECR_FRONTEND: ai-face-swap-frontend
