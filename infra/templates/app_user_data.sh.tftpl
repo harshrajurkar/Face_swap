@@ -7,41 +7,35 @@ apt-get update -y
 # Install prerequisites
 apt-get install -y ca-certificates curl gnupg lsb-release awscli git
 
-# Add Docker GPG key
+# Install Docker
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
   gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 chmod a+r /etc/apt/keyrings/docker.gpg
 
-# Add Docker repo
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
   https://download.docker.com/linux/ubuntu \
   $(. /etc/os-release && echo $VERSION_CODENAME) stable" | \
   tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-# Install Docker + Compose v2
 apt-get update -y
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# Start Docker
 systemctl enable docker
 systemctl start docker
 
-# Create base dir
+# Setup app directory
 mkdir -p /opt/ai-face-swap
 cd /opt/ai-face-swap
 
-# Clone repo INTO root (not into 'app')
+# Clone repo ONCE (needed for docker-compose file)
 if [ ! -d ".git" ]; then
   git clone -b main https://github.com/harshrajurkar/Face_swap.git .
 fi
 
-# Always pull latest
-git pull origin main
+# Go to app folder
+cd /opt/ai-face-swap/app
 
-# Go to actual app folder
-cd app
-
-# Setup compose
+# Prepare compose file
 cp docker-compose.aws.yml docker-compose.yml
