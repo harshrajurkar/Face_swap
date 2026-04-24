@@ -59,19 +59,28 @@ jobs:
         run: |
           echo "Starting SSM deployment..."
 
-          # Send command to instances with the tag
-          COMMAND_RESULT=$(aws ssm send-command \
-            --targets "Key=tag:DeployTarget,Values=face-swap-dev" \
+          # First, get the instance ID from the tag
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:DeployTarget,Values=face-swap-dev" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text)
+
+          echo "Target Instance ID: $INSTANCE_ID"
+
+          if [ "$INSTANCE_ID" = "None" ] || [ -z "$INSTANCE_ID" ]; then
+            echo "ERROR: No instance found with tag DeployTarget=face-swap-dev"
+            exit 1
+          fi
+
+          # Send command to the specific instance
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --parameters commands="cd /opt/ai-face-swap/app && docker compose pull && docker compose up -d --remove-orphans" \
-            --query "Command.{CommandId:CommandId,InstanceIds:InstanceIds}" \
-            --output json)
-
-          COMMAND_ID=$(echo $COMMAND_RESULT | jq -r '.CommandId')
-          INSTANCE_ID=$(echo $COMMAND_RESULT | jq -r '.InstanceIds[0]')
+            --query "Command.CommandId" \
+            --output text)
 
           echo "SSM Command ID: $COMMAND_ID"
-          echo "Target Instance ID: $INSTANCE_ID"
 
           # Wait for command to complete (with timeout)
           echo "Waiting for command to complete..."
