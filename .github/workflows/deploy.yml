@@ -76,7 +76,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="cd /opt/ai-face-swap/app && git pull origin main && cp docker-compose.aws.yml docker-compose.yml && docker compose pull && docker compose up -d --remove-orphans" \
+            --parameters commands="cd /opt/ai-face-swap/app && \ git pull origin main && \ cp docker-compose.aws.yml docker-compose.yml && \ docker compose pull && \ docker compose up -d --remove-orphans" \
             --query "Command.CommandId" \
             --output text)
 

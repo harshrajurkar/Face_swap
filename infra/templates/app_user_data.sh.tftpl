@@ -28,18 +28,20 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin do
 systemctl enable docker
 systemctl start docker
 
-# Create app dir
+# Create base dir
 mkdir -p /opt/ai-face-swap
 cd /opt/ai-face-swap
 
-# Clone repo (first time)
-if [ ! -d "app" ]; then
-  git clone -b main https://github.com/harshrajurkar/Face_swap.git app
+# Clone repo INTO root (not into 'app')
+if [ ! -d ".git" ]; then
+  git clone -b main https://github.com/harshrajurkar/Face_swap.git .
 fi
 
-# Always pull latest code
-cd /opt/ai-face-swap/app
+# Always pull latest
 git pull origin main
 
-# Copy AWS-specific compose file (files are in app/ subdirectory)
-cp app/docker-compose.aws.yml app/docker-compose.yml
+# Go to actual app folder
+cd app
+
+# Setup compose
+cp docker-compose.aws.yml docker-compose.yml
