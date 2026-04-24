@@ -645,11 +645,12 @@ resource "aws_instance" "app_debug" {
     aws_s3_bucket.app_storage,
   ]
 
-  tags = merge(local.common_tags, {
-  Name        = "${local.name_prefix}-app-debug"
-  Tier        = "application"
+ tags = merge(local.common_tags, {
+  Name         = "${local.name_prefix}-app-debug"
+  Tier         = "application"
   DeployTarget = "face-swap-dev"
-  })
+})
+
 }
 
 resource "aws_lb_target_group_attachment" "frontend_app_debug" {
