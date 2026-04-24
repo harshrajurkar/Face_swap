@@ -41,5 +41,5 @@ fi
 cd /opt/ai-face-swap/app
 git pull origin main
 
-# Copy AWS-specific compose file
-cp docker-compose.aws.yml docker-compose.yml
+# Copy AWS-specific compose file (files are in app/ subdirectory)
+cp app/docker-compose.aws.yml app/docker-compose.yml
