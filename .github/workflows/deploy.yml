@@ -59,14 +59,19 @@ jobs:
         run: |
           echo "Starting SSM deployment..."
 
-          COMMAND_ID=$(aws ssm send-command \
+          # Send command to instances with the tag
+          COMMAND_RESULT=$(aws ssm send-command \
             --targets "Key=tag:DeployTarget,Values=face-swap-dev" \
             --document-name "AWS-RunShellScript" \
             --parameters commands="cd /opt/ai-face-swap/app && docker compose pull && docker compose up -d --remove-orphans" \
-            --query "Command.CommandId" \
-            --output text)
+            --query "Command.{CommandId:CommandId,InstanceIds:InstanceIds}" \
+            --output json)
+
+          COMMAND_ID=$(echo $COMMAND_RESULT | jq -r '.CommandId')
+          INSTANCE_ID=$(echo $COMMAND_RESULT | jq -r '.InstanceIds[0]')
 
           echo "SSM Command ID: $COMMAND_ID"
+          echo "Target Instance ID: $INSTANCE_ID"
 
           # Wait for command to complete (with timeout)
           echo "Waiting for command to complete..."
