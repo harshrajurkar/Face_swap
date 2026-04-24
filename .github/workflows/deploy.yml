@@ -14,7 +14,6 @@ jobs:
 deploy:
 runs-on: ubuntu-latest
 
-```
 steps:
   # ----------------------------
   # Checkout
@@ -87,4 +86,3 @@ steps:
         --instance-id $INSTANCE_ID \
         --query "StandardOutputContent" \
         --output text
-```
