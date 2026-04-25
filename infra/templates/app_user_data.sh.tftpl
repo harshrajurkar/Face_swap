@@ -19,39 +19,39 @@ systemctl start docker
 APP_HOME="${app_dir}"
 REPO_DIR="${app_dir}/repo"
 SCRIPT_DIR="/opt/scripts"
-DEPLOY_SCRIPT_PATH="${SCRIPT_DIR}/deploy-ec2-single.sh"
+DEPLOY_SCRIPT_PATH="$${SCRIPT_DIR}/deploy-ec2-single.sh"
 ENV_FILE="${app_dir}/.env.runtime"
 
-mkdir -p "${APP_HOME}" "${SCRIPT_DIR}"
+mkdir -p "$${APP_HOME}" "$${SCRIPT_DIR}"
 
-if [ -d "${REPO_DIR}/.git" ]; then
-  git -C "${REPO_DIR}" fetch origin "${app_repo_branch}"
-  git -C "${REPO_DIR}" checkout "${app_repo_branch}"
-  git -C "${REPO_DIR}" pull --ff-only origin "${app_repo_branch}"
+if [ -d "$${REPO_DIR}/.git" ]; then
+  git -C "$${REPO_DIR}" fetch origin "${app_repo_branch}"
+  git -C "$${REPO_DIR}" checkout "${app_repo_branch}"
+  git -C "$${REPO_DIR}" pull --ff-only origin "${app_repo_branch}"
 else
-  git clone --branch "${app_repo_branch}" --single-branch "${app_repo_url}" "${REPO_DIR}"
+  git clone --branch "${app_repo_branch}" --single-branch "${app_repo_url}" "$${REPO_DIR}"
 fi
 
-cat > "${ENV_FILE}" <<EOF
-AWS_REGION=${aws_region}
-REPO_URL=${app_repo_url}
-GIT_BRANCH=${app_repo_branch}
-APP_REPO_DIR=${REPO_DIR}
-COMPOSE_FILE=${REPO_DIR}/app/docker-compose.aws.yml
-BACKEND_IMAGE_URI=${backend_image_uri}
-FRONTEND_RUNTIME_IMAGE=${frontend_image_uri}
-REDIS_URL=${redis_url}
+cat > "$${ENV_FILE}" <<EOF
+AWS_REGION='${aws_region}'
+REPO_URL='${app_repo_url}'
+GIT_BRANCH='${app_repo_branch}'
+APP_REPO_DIR='$${REPO_DIR}'
+COMPOSE_FILE='$${REPO_DIR}/app/docker-compose.aws.yml'
+BACKEND_IMAGE_URI='${backend_image_uri}'
+FRONTEND_RUNTIME_IMAGE='${frontend_image_uri}'
+REDIS_URL='${redis_url}'
 STORAGE_MODE=s3
-S3_BUCKET_NAME=${s3_bucket_name}
+S3_BUCKET_NAME='${s3_bucket_name}'
 S3_UPLOADS_PREFIX=uploads
 S3_OUTPUTS_PREFIX=outputs
-PUBLIC_BASE_URL=${public_base_url}
-CORS_ORIGINS=${cors_origins}
-EXECUTION_PROVIDER=${execution_provider}
+PUBLIC_BASE_URL='${public_base_url}'
+CORS_ORIGINS='${cors_origins}'
+EXECUTION_PROVIDER='${execution_provider}'
 WORKER_CONCURRENCY=${worker_concurrency}
 WORKER_JOB_TIMEOUT_SECONDS=${worker_job_timeout_seconds}
 WORKER_MAX_RETRIES=${worker_max_retries}
 EOF
 
-install -m 0755 "${REPO_DIR}/app/deploy-ec2-single.sh" "${DEPLOY_SCRIPT_PATH}"
-"${DEPLOY_SCRIPT_PATH}"
+install -m 0755 "$${REPO_DIR}/app/deploy-ec2-single.sh" "$${DEPLOY_SCRIPT_PATH}"
+"$${DEPLOY_SCRIPT_PATH}"

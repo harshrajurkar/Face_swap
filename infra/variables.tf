@@ -115,7 +115,7 @@ variable "app_repo_url" {
   default     = null
 
   validation {
-    condition     = var.app_repo_url != null && trim(var.app_repo_url) != ""
+    condition     = var.app_repo_url != null && trimspace(var.app_repo_url) != ""
     error_message = "Provide app_repo_url in tofu.auto.tfvars."
   }
 }
@@ -132,7 +132,7 @@ variable "frontend_image_uri" {
   default     = null
 
   validation {
-    condition     = var.frontend_image_uri != null && trim(var.frontend_image_uri) != ""
+    condition     = var.frontend_image_uri != null && trimspace(var.frontend_image_uri) != ""
     error_message = "Provide frontend_image_uri in tofu.auto.tfvars."
   }
 }
@@ -143,7 +143,7 @@ variable "backend_image_uri" {
   default     = null
 
   validation {
-    condition     = var.backend_image_uri != null && trim(var.backend_image_uri) != ""
+    condition     = var.backend_image_uri != null && trimspace(var.backend_image_uri) != ""
     error_message = "Provide backend_image_uri in tofu.auto.tfvars."
   }
 }
