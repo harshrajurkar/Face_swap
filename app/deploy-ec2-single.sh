@@ -75,3 +75,5 @@ docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps
 echo "Deployment complete."
 echo "UI base URL: ${PUBLIC_BASE_URL}"
 echo "API base URL: ${PUBLIC_BASE_URL}/api"
+
+# checking-purpose
