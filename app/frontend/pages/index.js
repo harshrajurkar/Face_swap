@@ -23,6 +23,19 @@ function resolveOutputUrl(outputUrl) {
   return `${BACKEND_ORIGIN || getBrowserOrigin()}${outputUrl}`;
 }
 
+function buildDownloadUrl(outputUrl) {
+  if (!outputUrl) {
+    return '';
+  }
+  try {
+    const url = new URL(outputUrl, getBrowserOrigin());
+    url.searchParams.set('download', '1');
+    return url.toString();
+  } catch {
+    return outputUrl.includes('?') ? `${outputUrl}&download=1` : `${outputUrl}?download=1`;
+  }
+}
+
 function inferBackendOrigin() {
   if (API_BASE_URL.startsWith('/')) {
     return getBrowserOrigin();
@@ -273,9 +286,9 @@ export default function HomePage() {
 
     setIsDownloading(true);
     try {
-      // S3 presigned URLs can render in the browser but fail fetch() without S3 CORS.
+      // Ask the same-origin backend to stream S3 output as an attachment.
       const link = document.createElement('a');
-      link.href = outputUrl;
+      link.href = buildDownloadUrl(outputUrl);
       link.download = resultName;
       link.rel = 'noreferrer';
       document.body.appendChild(link);

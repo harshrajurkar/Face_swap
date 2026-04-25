@@ -88,7 +88,8 @@ class JobStore:
             await self.storage.publish_output(job_id, output_path)
             if self.storage.is_s3_enabled():
                 existing["output_path"] = self.storage.build_output_object_reference(job_id)
-                existing["output_url"] = self.storage.build_presigned_output_url(f"{job_id}.png")
+                # Keep downloads on the ALB origin; the backend streams S3 objects from /outputs.
+                existing["output_url"] = self.storage.build_output_url(job_id, existing.get("response_base_url"))
             else:
                 existing["output_path"] = output_path
                 existing["output_url"] = self.storage.build_output_url(job_id, existing.get("response_base_url"))

@@ -135,3 +135,12 @@ class StorageService:
             },
             ExpiresIn=expires_in,
         )
+
+    def get_output_object(self, filename: str):
+        if not self._use_s3():
+            raise ValueError("S3 storage is not enabled.")
+
+        return self.s3_client.get_object(
+            Bucket=self.settings.s3_bucket_name,
+            Key=self._outputs_key(filename),
+        )
