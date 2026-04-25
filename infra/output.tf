@@ -38,11 +38,6 @@ output "backend_target_group_arn" {
   value       = aws_lb_target_group.backend.arn
 }
 
-# output "autoscaling_group_name" {
-#   description = "Auto Scaling Group name for the application tier."
-#   value       = aws_autoscaling_group.app.name
-# }
-
 output "app_instance_profile_name" {
   description = "IAM instance profile attached to app EC2 instances."
   value       = aws_iam_instance_profile.app_ec2.name
@@ -51,6 +46,11 @@ output "app_instance_profile_name" {
 output "redis_primary_endpoint" {
   description = "ElastiCache Redis primary endpoint."
   value       = aws_elasticache_replication_group.redis.primary_endpoint_address
+}
+
+output "redis_url" {
+  description = "Runtime Redis URL consumed by backend and worker."
+  value       = "${var.redis_use_tls ? "rediss" : "redis"}://${aws_elasticache_replication_group.redis.primary_endpoint_address}:${var.redis_port}/0"
 }
 
 output "storage_bucket_name" {
@@ -91,4 +91,14 @@ output "app_instance_private_ip" {
 output "public_base_url" {
   description = "Public base URL served by ALB."
   value       = "${var.enable_https && var.acm_certificate_arn != null ? "https" : "http"}://${aws_lb.app.dns_name}"
+}
+
+output "ec2_runtime_env_file" {
+  description = "Runtime environment file path on EC2."
+  value       = "${var.app_directory}/.env.runtime"
+}
+
+output "ec2_deploy_script_path" {
+  description = "Deployment script path on EC2."
+  value       = "/opt/scripts/deploy-ec2-single.sh"
 }

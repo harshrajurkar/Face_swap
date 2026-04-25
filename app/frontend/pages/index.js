@@ -23,6 +23,19 @@ function resolveOutputUrl(outputUrl) {
   return `${BACKEND_ORIGIN || getBrowserOrigin()}${outputUrl}`;
 }
 
+function buildDownloadUrl(outputUrl) {
+  if (!outputUrl) {
+    return '';
+  }
+  try {
+    const url = new URL(outputUrl, getBrowserOrigin());
+    url.searchParams.set('download', '1');
+    return url.toString();
+  } catch {
+    return outputUrl.includes('?') ? `${outputUrl}&download=1` : `${outputUrl}?download=1`;
+  }
+}
+
 function inferBackendOrigin() {
   if (API_BASE_URL.startsWith('/')) {
     return getBrowserOrigin();
@@ -273,20 +286,14 @@ export default function HomePage() {
 
     setIsDownloading(true);
     try {
-      const response = await fetch(outputUrl);
-      if (!response.ok) {
-        throw new Error('Download failed.');
-      }
-
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
+      // Ask the same-origin backend to stream S3 output as an attachment.
       const link = document.createElement('a');
-      link.href = blobUrl;
+      link.href = buildDownloadUrl(outputUrl);
       link.download = resultName;
+      link.rel = 'noreferrer';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
     } catch (downloadError) {
       setError(downloadError.message || 'Unable to download output.');
     } finally {

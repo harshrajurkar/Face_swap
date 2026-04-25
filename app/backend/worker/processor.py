@@ -68,19 +68,19 @@ class JobProcessor:
         print(f"[DEBUG] Job status updated to 'processing'")
 
         try:
-            source_path = job_payload["source_path"]
-            target_path = job_payload["target_path"]
+            source_reference = job_payload["source_path"]
+            target_reference = job_payload["target_path"]
             enhance_face = job_payload.get("enhance_face", False)
             print(f"[DEBUG] Job details:")
-            print(f"  - source_path: {source_path}")
-            print(f"  - target_path: {target_path}")
+            print(f"  - source_reference: {source_reference}")
+            print(f"  - target_reference: {target_reference}")
             print(f"  - enhance_face: {enhance_face}")
             
             logger.info(
                 "Job %s starting face swap. Source=%s Target=%s enhance=%s",
                 job_id,
-                source_path,
-                target_path,
+                source_reference,
+                target_reference,
                 enhance_face,
             )
 
@@ -92,6 +92,8 @@ class JobProcessor:
                 status_message="Models loaded successfully. Analyzing images...",
             )
 
+            source_path = await self.storage_service.materialize_input(job_id, "source", str(source_reference))
+            target_path = await self.storage_service.materialize_input(job_id, "target", str(target_reference))
             output_path = self.storage_service.build_output_path(job_id)
             print(f"[DEBUG] Output path: {output_path}")
             logger.info("Job %s: output_path=%s", job_id, output_path)

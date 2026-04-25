@@ -1,41 +1,75 @@
 #!/bin/bash
-set -eux
+set -euo pipefail
 
-# Update
+export DEBIAN_FRONTEND=noninteractive
+
 apt-get update -y
+apt-get install -y ca-certificates curl gnupg lsb-release awscli git jq
 
-# Install prerequisites
-apt-get install -y ca-certificates curl gnupg lsb-release awscli git
-
-# Install Docker
 install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-  gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 chmod a+r /etc/apt/keyrings/docker.gpg
-
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo $VERSION_CODENAME) stable" | \
-  tee /etc/apt/sources.list.d/docker.list > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
 
 apt-get update -y
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
 systemctl enable docker
 systemctl start docker
 
-# Setup app directory
-mkdir -p /opt/ai-face-swap
-cd /opt/ai-face-swap
-
-# Clone repo ONCE (needed for docker-compose file)
-if [ ! -d ".git" ]; then
-  git clone -b main https://github.com/harshrajurkar/Face_swap.git .
+# Fix: small free-tier instances need swap for InsightFace/inswapper model loading.
+if [ ! -f /swapfile ]; then
+  fallocate -l 4G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
 fi
 
-# Go to app folder
-cd /opt/ai-face-swap/app
+if ! swapon --show=NAME | grep -qx /swapfile; then
+  swapon /swapfile
+fi
 
-# Prepare compose file
-cp docker-compose.aws.yml docker-compose.yml
+if ! grep -qE '^/swapfile[[:space:]]+none[[:space:]]+swap[[:space:]]+' /etc/fstab; then
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+APP_HOME="${app_dir}"
+REPO_DIR="${app_dir}/repo"
+SCRIPT_DIR="/opt/scripts"
+DEPLOY_SCRIPT_PATH="$${SCRIPT_DIR}/deploy-ec2-single.sh"
+ENV_FILE="${app_dir}/.env.runtime"
+
+mkdir -p "$${APP_HOME}" "$${SCRIPT_DIR}"
+
+if [ -d "$${REPO_DIR}/.git" ]; then
+  git -C "$${REPO_DIR}" fetch origin "${app_repo_branch}"
+  git -C "$${REPO_DIR}" checkout "${app_repo_branch}"
+  git -C "$${REPO_DIR}" pull --ff-only origin "${app_repo_branch}"
+else
+  git clone --branch "${app_repo_branch}" --single-branch "${app_repo_url}" "$${REPO_DIR}"
+fi
+
+cat > "$${ENV_FILE}" <<EOF
+AWS_REGION='${aws_region}'
+REPO_URL='${app_repo_url}'
+GIT_BRANCH='${app_repo_branch}'
+APP_REPO_DIR='$${REPO_DIR}'
+COMPOSE_FILE='$${REPO_DIR}/app/docker-compose.aws.yml'
+# Fix: keep older compose files with APP_SHARED_DIR volumes working during branch transitions.
+APP_SHARED_DIR='${app_dir}'
+BACKEND_IMAGE_URI='${backend_image_uri}'
+FRONTEND_RUNTIME_IMAGE='${frontend_image_uri}'
+REDIS_URL='${redis_url}'
+STORAGE_MODE=s3
+# Fix: always render the bucket created by the current OpenTofu apply, avoiding stale S3 names.
+S3_BUCKET_NAME='${s3_bucket_name}'
+S3_UPLOADS_PREFIX=uploads
+S3_OUTPUTS_PREFIX=outputs
+PUBLIC_BASE_URL='${public_base_url}'
+CORS_ORIGINS='${cors_origins}'
+EXECUTION_PROVIDER='${execution_provider}'
+WORKER_CONCURRENCY=${worker_concurrency}
+WORKER_JOB_TIMEOUT_SECONDS=${worker_job_timeout_seconds}
+WORKER_MAX_RETRIES=${worker_max_retries}
+EOF
+
+install -m 0755 "$${REPO_DIR}/app/deploy-ec2-single.sh" "$${DEPLOY_SCRIPT_PATH}"
+"$${DEPLOY_SCRIPT_PATH}"

@@ -2,8 +2,9 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi import Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.config import get_settings
 from app.routes.job import router as job_router
@@ -30,17 +31,35 @@ async def health_check() -> dict[str, str]:
 
 
 @app.get("/outputs/{filename}", tags=["outputs"])
-async def get_output_file(filename: str):
+async def get_output_file(filename: str, download: bool = Query(default=False)):
     storage_service = StorageService(settings)
     safe_filename = Path(filename).name
 
     if storage_service._use_s3():
-        return RedirectResponse(url=storage_service.build_presigned_output_url(safe_filename))
+        try:
+            output_object = storage_service.get_output_object(safe_filename)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=404, detail="Output file not found.") from exc
+
+        disposition = "attachment" if download else "inline"
+        return StreamingResponse(
+            output_object["Body"].iter_chunks(),
+            media_type=output_object.get("ContentType") or "image/png",
+            headers={
+                "Content-Disposition": f'{disposition}; filename="{safe_filename}"',
+                "Cache-Control": "private, max-age=300",
+            },
+        )
 
     output_path = settings.outputs_dir / safe_filename
     if not output_path.exists():
         raise HTTPException(status_code=404, detail="Output file not found.")
-    return FileResponse(output_path)
+    return FileResponse(
+        output_path,
+        media_type="image/png",
+        filename=safe_filename if download else None,
+        content_disposition_type="attachment" if download else "inline",
+    )
 
 
 @app.get("/", include_in_schema=False)

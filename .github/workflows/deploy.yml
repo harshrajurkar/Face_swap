@@ -2,115 +2,136 @@ name: CI/CD - Face Swap Deploy
 
 on:
   push:
-    branches: [ main ]
+    branches: 
+      - main
+      - v*
 
 env:
   AWS_REGION: us-east-1
-  ACCOUNT_ID: 132690414014
-  ECR_BACKEND: ai-face-swap-backend
-  ECR_FRONTEND: ai-face-swap-frontend
+  PROJECT_NAME: ai-face-swap
+  ENVIRONMENT: dev
+  ECR_BACKEND_REPO: ai-face-swap-backend
+  ECR_FRONTEND_REPO: ai-face-swap-frontend
+  DEPLOY_TARGET_TAG: face-swap-dev
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # ----------------------------
-      # Checkout
-      # ----------------------------
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ----------------------------
-      # AWS Auth
-      # ----------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ----------------------------
-      # Build & Push Backend
-      # ----------------------------
-      - name: Build backend image
+      - name: Build and push images
+        id: build_push
+        shell: bash
         run: |
-          docker build -t backend ./app/backend
-          docker tag backend:latest $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_BACKEND:latest
-          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_BACKEND:latest
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          IMAGE_TAG="sha-${GITHUB_SHA}"
 
-      # ----------------------------
-      # Build & Push Frontend
-      # ----------------------------
-      - name: Build frontend image
-        run: |
-          docker build -t frontend ./app/frontend
-          docker tag frontend:latest $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_FRONTEND:latest
-          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_FRONTEND:latest
+          BACKEND_IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_BACKEND_REPO}:${IMAGE_TAG}"
+          FRONTEND_IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_FRONTEND_REPO}:${IMAGE_TAG}"
 
-      # ----------------------------
-      # Deploy via SSM
-      # ----------------------------
+          docker build -t "${BACKEND_IMAGE_URI}" ./app/backend
+          docker push "${BACKEND_IMAGE_URI}"
+          docker tag "${BACKEND_IMAGE_URI}" "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_BACKEND_REPO}:latest"
+          docker push "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_BACKEND_REPO}:latest"
+
+          docker build -t "${FRONTEND_IMAGE_URI}" ./app/frontend
+          docker push "${FRONTEND_IMAGE_URI}"
+          docker tag "${FRONTEND_IMAGE_URI}" "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_FRONTEND_REPO}:latest"
+          docker push "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_FRONTEND_REPO}:latest"
+
+          echo "backend_image_uri=${BACKEND_IMAGE_URI}" >> "$GITHUB_OUTPUT"
+          echo "frontend_image_uri=${FRONTEND_IMAGE_URI}" >> "$GITHUB_OUTPUT"
+
       - name: Deploy via SSM
+        shell: bash
+        env:
+          BACKEND_IMAGE_URI: ${{ steps.build_push.outputs.backend_image_uri }}
+          FRONTEND_IMAGE_URI: ${{ steps.build_push.outputs.frontend_image_uri }}
         run: |
-          echo "Starting SSM deployment..."
-
-          # Get instance ID from tag
-          INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:DeployTarget,Values=face-swap-dev" "Name=instance-state-name,Values=running" \
+          set -euo pipefail
+          INSTANCE_ID="$(aws ec2 describe-instances \
+            --filters "Name=tag:DeployTarget,Values=${DEPLOY_TARGET_TAG}" "Name=instance-state-name,Values=running" \
             --query "Reservations[0].Instances[0].InstanceId" \
-            --output text)
+            --output text)"
 
-          echo "Target Instance ID: $INSTANCE_ID"
-
-          if [ "$INSTANCE_ID" = "None" ] || [ -z "$INSTANCE_ID" ]; then
-            echo "ERROR: No instance found"
+          if [[ -z "${INSTANCE_ID}" || "${INSTANCE_ID}" == "None" ]]; then
+            echo "No running instance found with DeployTarget=${DEPLOY_TARGET_TAG}" >&2
             exit 1
           fi
 
-          # Send SSM command - create .env file using echo chain, then run docker compose
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
+          # Fix: discover the live OpenTofu-created bucket so CI does not keep stale S3_BUCKET_NAME values.
+          STORAGE_BUCKET="$(aws s3api list-buckets \
+            --query "sort_by(Buckets[?starts_with(Name, '${PROJECT_NAME}-${ENVIRONMENT}-storage-')], &CreationDate)[-1].Name" \
+            --output text)"
+
+          if [[ -z "${STORAGE_BUCKET}" || "${STORAGE_BUCKET}" == "None" ]]; then
+            echo "No S3 bucket found with prefix ${PROJECT_NAME}-${ENVIRONMENT}-storage-" >&2
+            exit 1
+          fi
+
+          COMMANDS_JSON="$(jq -cn \
+            --arg backend "${BACKEND_IMAGE_URI}" \
+            --arg frontend "${FRONTEND_IMAGE_URI}" \
+            --arg branch "${GITHUB_REF_NAME}" \
+            --arg bucket "${STORAGE_BUCKET}" \
+            '[
+              "set -eu",
+              "ENV_FILE=/opt/ai-face-swap/.env.runtime",
+              "test -f \"$ENV_FILE\"",
+              "# Fix: keep runtime branch, bucket, and image values synced with the current CI deployment.",
+              "sed -i \"s|^GIT_BRANCH=.*$|GIT_BRANCH='\''" + $branch + "'\''|\" \"$ENV_FILE\"",
+              "sed -i \"s|^S3_BUCKET_NAME=.*$|S3_BUCKET_NAME='\''" + $bucket + "'\''|\" \"$ENV_FILE\"",
+              "sed -i \"s|^BACKEND_IMAGE_URI=.*$|BACKEND_IMAGE_URI='\''" + $backend + "'\''|\" \"$ENV_FILE\"",
+              "sed -i \"s|^FRONTEND_RUNTIME_IMAGE=.*$|FRONTEND_RUNTIME_IMAGE='\''" + $frontend + "'\''|\" \"$ENV_FILE\"",
+              "ENV_FILE=\"$ENV_FILE\" bash /opt/scripts/deploy-ec2-single.sh"
+            ]')"
+
+          COMMAND_ID="$(aws ssm send-command \
+            --instance-ids "${INSTANCE_ID}" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="cd /opt/ai-face-swap/app && aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com && echo BACKEND_IMAGE_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-face-swap-backend:latest > .env && echo FRONTEND_RUNTIME_IMAGE=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-face-swap-frontend:latest >> .env && echo REDIS_URL=redis://redis:6379/0 >> .env && echo EXECUTION_PROVIDER=CPUExecutionProvider >> .env && echo WORKER_CONCURRENCY=1 >> .env && echo WORKER_JOB_TIMEOUT_SECONDS=900 >> .env && echo WORKER_MAX_RETRIES=2 >> .env && echo STORAGE_MODE=local >> .env && echo APP_SHARED_DIR=/opt/ai-face-swap >> .env && echo CORS_ORIGINS='[\\\"*\\\"]' >> .env && echo PUBLIC_BASE_URL=http://localhost >> .env && echo S3_BUCKET_NAME=dummy >> .env && echo S3_UPLOADS_PREFIX=uploads >> .env && echo S3_OUTPUTS_PREFIX=outputs >> .env && docker compose --env-file .env -f docker-compose.aws.yml pull && docker compose --env-file .env -f docker-compose.aws.yml up -d --remove-orphans" \
+            --parameters "commands=${COMMANDS_JSON}" \
             --query "Command.CommandId" \
-            --output text)
+            --output text)"
 
-          echo "SSM Command ID: $COMMAND_ID"
+          echo "SSM command ID: ${COMMAND_ID}"
 
-          # Wait for completion
-          aws ssm wait command-executed \
-            --command-id $COMMAND_ID \
-            --instance-id $INSTANCE_ID || true
+          STATUS="Pending"
+          for attempt in {1..120}; do
+            STATUS="$(aws ssm get-command-invocation \
+              --command-id "${COMMAND_ID}" \
+              --instance-id "${INSTANCE_ID}" \
+              --query "Status" \
+              --output text 2>/dev/null || echo "Pending")"
 
-          # Get output
-          echo "=== OUTPUT ==="
-          aws ssm get-command-invocation \
-            --command-id $COMMAND_ID \
-            --instance-id $INSTANCE_ID \
-            --query "StandardOutputContent" \
-            --output text
+            echo "SSM status after $((attempt * 15))s: ${STATUS}"
 
-          echo "=== ERRORS ==="
-          aws ssm get-command-invocation \
-            --command-id $COMMAND_ID \
-            --instance-id $INSTANCE_ID \
-            --query "StandardErrorContent" \
-            --output text
+            case "${STATUS}" in
+              Success|Cancelled|TimedOut|Failed|Cancelling)
+                break
+                ;;
+            esac
 
-          # Check status
-          STATUS=$(aws ssm get-command-invocation \
-            --command-id $COMMAND_ID \
-            --instance-id $INSTANCE_ID \
-            --query "Status" \
-            --output text)
+            sleep 15
+          done
 
-          echo "Final Status: $STATUS"
+          echo "SSM status: ${STATUS}"
+          aws ssm get-command-invocation --command-id "${COMMAND_ID}" --instance-id "${INSTANCE_ID}" --query "StandardOutputContent" --output text
+          aws ssm get-command-invocation --command-id "${COMMAND_ID}" --instance-id "${INSTANCE_ID}" --query "StandardErrorContent" --output text
 
-          if [ "$STATUS" != "Success" ]; then
+          if [[ "${STATUS}" != "Success" ]]; then
             exit 1
           fi
