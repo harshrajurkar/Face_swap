@@ -6,12 +6,15 @@ public_subnet_cidrs = ["10.20.1.0/24", "10.20.2.0/24"]
 private_app_subnet_cidrs  = ["10.20.11.0/24", "10.20.12.0/24"]
 private_data_subnet_cidrs = ["10.20.21.0/24", "10.20.22.0/24"]
 
-app_instance_type     = "t3.micro"
+# Fix: InsightFace/worker model loading is too heavy for t3.micro and can crash-loop.
+app_instance_type     = "c7i-flex.large"
 app_root_volume_size  = 50
 app_directory         = "/opt/ai-face-swap"
 app_repo_url          = "https://github.com/your-org/your-repo.git"
-app_repo_branch       = "main"
+# Fix: keep EC2 deploy script synced with the branch CI/CD deploys.
+app_repo_branch       = "v1.0.31"
 
+# Fix: use the same split ECR repos that the GitHub Actions workflow updates.
 frontend_image_uri = "<aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap-frontend:latest"
 backend_image_uri  = "<aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/ai-face-swap-backend:latest"
 

@@ -38,10 +38,13 @@ REPO_URL='${app_repo_url}'
 GIT_BRANCH='${app_repo_branch}'
 APP_REPO_DIR='$${REPO_DIR}'
 COMPOSE_FILE='$${REPO_DIR}/app/docker-compose.aws.yml'
+# Fix: keep older compose files with APP_SHARED_DIR volumes working during branch transitions.
+APP_SHARED_DIR='${app_dir}'
 BACKEND_IMAGE_URI='${backend_image_uri}'
 FRONTEND_RUNTIME_IMAGE='${frontend_image_uri}'
 REDIS_URL='${redis_url}'
 STORAGE_MODE=s3
+# Fix: always render the bucket created by the current OpenTofu apply, avoiding stale S3 names.
 S3_BUCKET_NAME='${s3_bucket_name}'
 S3_UPLOADS_PREFIX=uploads
 S3_OUTPUTS_PREFIX=outputs

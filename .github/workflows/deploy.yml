@@ -6,6 +6,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  PROJECT_NAME: ai-face-swap
+  ENVIRONMENT: dev
   ECR_BACKEND_REPO: ai-face-swap-backend
   ECR_FRONTEND_REPO: ai-face-swap-frontend
   DEPLOY_TARGET_TAG: face-swap-dev
@@ -69,13 +71,28 @@ jobs:
             exit 1
           fi
 
+          # Fix: discover the live OpenTofu-created bucket so CI does not keep stale S3_BUCKET_NAME values.
+          STORAGE_BUCKET="$(aws s3api list-buckets \
+            --query "sort_by(Buckets[?starts_with(Name, '${PROJECT_NAME}-${ENVIRONMENT}-storage-')], &CreationDate)[-1].Name" \
+            --output text)"
+
+          if [[ -z "${STORAGE_BUCKET}" || "${STORAGE_BUCKET}" == "None" ]]; then
+            echo "No S3 bucket found with prefix ${PROJECT_NAME}-${ENVIRONMENT}-storage-" >&2
+            exit 1
+          fi
+
           COMMANDS_JSON="$(jq -cn \
             --arg backend "${BACKEND_IMAGE_URI}" \
             --arg frontend "${FRONTEND_IMAGE_URI}" \
+            --arg branch "${GITHUB_REF_NAME}" \
+            --arg bucket "${STORAGE_BUCKET}" \
             '[
               "set -eu",
               "ENV_FILE=/opt/ai-face-swap/.env.runtime",
               "test -f \"$ENV_FILE\"",
+              "# Fix: keep runtime branch, bucket, and image values synced with the current CI deployment.",
+              "sed -i \"s|^GIT_BRANCH=.*$|GIT_BRANCH='\''" + $branch + "'\''|\" \"$ENV_FILE\"",
+              "sed -i \"s|^S3_BUCKET_NAME=.*$|S3_BUCKET_NAME='\''" + $bucket + "'\''|\" \"$ENV_FILE\"",
               "sed -i \"s|^BACKEND_IMAGE_URI=.*$|BACKEND_IMAGE_URI='\''" + $backend + "'\''|\" \"$ENV_FILE\"",
               "sed -i \"s|^FRONTEND_RUNTIME_IMAGE=.*$|FRONTEND_RUNTIME_IMAGE='\''" + $frontend + "'\''|\" \"$ENV_FILE\"",
               "ENV_FILE=\"$ENV_FILE\" bash /opt/scripts/deploy-ec2-single.sh"
