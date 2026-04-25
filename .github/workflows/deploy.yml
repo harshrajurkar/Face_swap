@@ -2,7 +2,9 @@ name: CI/CD - Face Swap Deploy
 
 on:
   push:
-    branches: [v1.0.31]
+    branches: 
+      - main
+      - v*
 
 env:
   AWS_REGION: us-east-1
