@@ -45,9 +45,9 @@ fi
 if [[ ! -d "${APP_REPO_DIR}/.git" ]]; then
   git clone --branch "${GIT_BRANCH}" --single-branch "${REPO_URL}" "${APP_REPO_DIR}"
 else
-  git -C "${APP_REPO_DIR}" fetch origin "${GIT_BRANCH}"
-  git -C "${APP_REPO_DIR}" checkout "${GIT_BRANCH}"
-  git -C "${APP_REPO_DIR}" pull --ff-only origin "${GIT_BRANCH}"
+  # Fix: single-branch clones may not have a local branch for the new CI branch.
+  git -C "${APP_REPO_DIR}" fetch origin "${GIT_BRANCH}:refs/remotes/origin/${GIT_BRANCH}"
+  git -C "${APP_REPO_DIR}" checkout -B "${GIT_BRANCH}" "origin/${GIT_BRANCH}"
 fi
 
 if [[ ! -f "${COMPOSE_FILE}" ]]; then

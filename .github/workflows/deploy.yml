@@ -97,6 +97,11 @@ jobs:
               "sed -i \"s|^S3_BUCKET_NAME=.*$|S3_BUCKET_NAME='\''" + $bucket + "'\''|\" \"$ENV_FILE\"",
               "sed -i \"s|^BACKEND_IMAGE_URI=.*$|BACKEND_IMAGE_URI='\''" + $backend + "'\''|\" \"$ENV_FILE\"",
               "sed -i \"s|^FRONTEND_RUNTIME_IMAGE=.*$|FRONTEND_RUNTIME_IMAGE='\''" + $frontend + "'\''|\" \"$ENV_FILE\"",
+              ". \"$ENV_FILE\"",
+              "# Fix: repair the checked-out repo before calling the installed deploy script.",
+              "git -C \"$APP_REPO_DIR\" fetch origin \"$GIT_BRANCH:refs/remotes/origin/$GIT_BRANCH\"",
+              "git -C \"$APP_REPO_DIR\" checkout -B \"$GIT_BRANCH\" \"origin/$GIT_BRANCH\"",
+              "install -m 0755 \"$APP_REPO_DIR/app/deploy-ec2-single.sh\" /opt/scripts/deploy-ec2-single.sh",
               "ENV_FILE=\"$ENV_FILE\" bash /opt/scripts/deploy-ec2-single.sh"
             ]')"
 
