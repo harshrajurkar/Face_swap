@@ -59,7 +59,7 @@ variable "app_instance_type" {
   description = "EC2 instance type for the private application tier."
   type        = string
   # Fix: t3.micro is too small for the face-swap worker model load.
-  default     = "c7i-flex.large"
+  default = "t3.small"
 }
 
 variable "app_root_volume_size" {
