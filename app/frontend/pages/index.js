@@ -273,20 +273,14 @@ export default function HomePage() {
 
     setIsDownloading(true);
     try {
-      const response = await fetch(outputUrl);
-      if (!response.ok) {
-        throw new Error('Download failed.');
-      }
-
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
+      // S3 presigned URLs can render in the browser but fail fetch() without S3 CORS.
       const link = document.createElement('a');
-      link.href = blobUrl;
+      link.href = outputUrl;
       link.download = resultName;
+      link.rel = 'noreferrer';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
     } catch (downloadError) {
       setError(downloadError.message || 'Unable to download output.');
     } finally {

@@ -16,6 +16,21 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin do
 systemctl enable docker
 systemctl start docker
 
+# Fix: small free-tier instances need swap for InsightFace/inswapper model loading.
+if [ ! -f /swapfile ]; then
+  fallocate -l 4G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+fi
+
+if ! swapon --show=NAME | grep -qx /swapfile; then
+  swapon /swapfile
+fi
+
+if ! grep -qE '^/swapfile[[:space:]]+none[[:space:]]+swap[[:space:]]+' /etc/fstab; then
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
 APP_HOME="${app_dir}"
 REPO_DIR="${app_dir}/repo"
 SCRIPT_DIR="/opt/scripts"
