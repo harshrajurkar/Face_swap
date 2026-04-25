@@ -73,7 +73,7 @@ jobs:
             --arg backend "${BACKEND_IMAGE_URI}" \
             --arg frontend "${FRONTEND_IMAGE_URI}" \
             '[
-              "set -euo pipefail",
+              "set -eu",
               "ENV_FILE=/opt/ai-face-swap/.env.runtime",
               "test -f \"$ENV_FILE\"",
               "sed -i \"s|^BACKEND_IMAGE_URI=.*$|BACKEND_IMAGE_URI='\''" + $backend + "'\''|\" \"$ENV_FILE\"",
