@@ -6,6 +6,7 @@ This folder contains the runtime app stack:
 - `backend/` (FastAPI)
 - `worker/` (background processing in the backend image)
 - compose files for local and AWS runtime
+- `monitoring/` (Prometheus + Grafana config, dashboards, and alerts)
 
 ## Runtime Modes
 
@@ -18,6 +19,42 @@ This folder contains the runtime app stack:
 - Uses ElastiCache via `REDIS_URL`.
 - Uses S3 via `STORAGE_MODE=s3` and bucket/prefix variables.
 - Pulls prebuilt images from ECR (`BACKEND_IMAGE_URI`, `FRONTEND_RUNTIME_IMAGE`).
+- Runs Prometheus, Grafana, node-exporter, and cAdvisor for observability.
+
+## Monitoring Stack (Prometheus + Grafana)
+
+The compose files now include:
+- `prometheus`: metrics collection and alert rule evaluation
+- `grafana`: dashboards and visualization
+- `node-exporter`: host-level CPU/memory metrics
+- `cadvisor`: container-level CPU/memory metrics
+- `backend /metrics`: app request rate, latency, and error metrics
+
+Default access:
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3001`
+- Grafana login: `admin` / `prom-operator`
+
+Dashboards are auto-provisioned from:
+- `monitoring/grafana/dashboards/faceswap-observability.json`
+
+Prometheus config and alerts:
+- `monitoring/prometheus/prometheus.yml`
+- `monitoring/prometheus/alert_rules.yml`
+
+Bring up app + monitoring:
+
+```bash
+docker compose -f docker-compose.aws.yml --env-file /opt/ai-face-swap/.env.runtime up -d
+```
+
+Key panels for resume screenshots:
+- HTTP request rate
+- HTTP 5xx error rate
+- HTTP p95 latency
+- Host CPU usage
+- Host memory usage
+- Container CPU usage
 
 ## Local Run
 
@@ -34,7 +71,7 @@ Deployment is driven by `/opt/scripts/deploy-ec2-single.sh` and `/opt/ai-face-sw
 The script:
 - syncs the repo branch defined in env
 - logs into ECR based on image URIs in env
-- runs `docker compose --env-file ... -f docker-compose.aws.yml pull`
+- runs `docker compose --env-file ... -f docker-compose.aws.yml pull` (app + monitoring images)
 - runs `docker compose --env-file ... -f docker-compose.aws.yml up -d`
 
 ## Required AWS Runtime Variables

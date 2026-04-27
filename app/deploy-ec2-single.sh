@@ -68,7 +68,7 @@ if [[ "${FRONTEND_REGISTRY}" != "${BACKEND_REGISTRY}" ]]; then
   aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${FRONTEND_REGISTRY}"
 fi
 
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull backend worker frontend
+docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull backend worker frontend prometheus grafana node-exporter cadvisor
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --remove-orphans
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps
 

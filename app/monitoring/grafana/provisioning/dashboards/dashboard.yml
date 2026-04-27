@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: "AI Face Swap Monitoring"
+    orgId: 1
+    folder: "AI Face Swap"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

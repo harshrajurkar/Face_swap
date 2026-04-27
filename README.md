@@ -13,6 +13,7 @@ repo-clean/
 |   +-- docker-compose.aws.yml
 |   +-- docker-compose.aws-build.yml
 |   +-- deploy-ec2-single.sh
+|   +-- monitoring/
 |   +-- README.md
 +-- infra/
     +-- main.tf
@@ -20,6 +21,8 @@ repo-clean/
     +-- output.tf
     +-- tofu.auto.tfvars.example
     +-- templates/
++-- screenshots/
+    +-- monitoring/
 ```
 
 ## What Goes Where

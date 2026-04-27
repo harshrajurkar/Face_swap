@@ -102,7 +102,9 @@ jobs:
               "git -C \"$APP_REPO_DIR\" fetch origin \"$GIT_BRANCH:refs/remotes/origin/$GIT_BRANCH\"",
               "git -C \"$APP_REPO_DIR\" checkout -B \"$GIT_BRANCH\" \"origin/$GIT_BRANCH\"",
               "install -m 0755 \"$APP_REPO_DIR/app/deploy-ec2-single.sh\" /opt/scripts/deploy-ec2-single.sh",
-              "ENV_FILE=\"$ENV_FILE\" bash /opt/scripts/deploy-ec2-single.sh"
+              "ENV_FILE=\"$ENV_FILE\" bash /opt/scripts/deploy-ec2-single.sh",
+              "# Enforce compose apply in CI/CD so monitoring services are always brought up.",
+              "cd \"$APP_REPO_DIR/app\" && docker compose --env-file \"$ENV_FILE\" -f docker-compose.aws.yml up -d"
             ]')"
 
           COMMAND_ID="$(aws ssm send-command \

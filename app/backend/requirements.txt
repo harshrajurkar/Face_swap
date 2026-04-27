@@ -14,3 +14,4 @@ torch==2.7.0
 torchvision==0.22.0
 pydantic-settings==2.8.1
 boto3==1.38.18
+prometheus-fastapi-instrumentator==7.1.0
