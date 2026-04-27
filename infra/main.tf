@@ -36,6 +36,14 @@ data "aws_ami" "ubuntu" {
   }
 }
 
+data "aws_acm_certificate" "https" {
+  count = var.enable_https && var.acm_certificate_arn == null && var.acm_certificate_domain != null ? 1 : 0
+
+  domain      = var.acm_certificate_domain
+  statuses    = ["ISSUED"]
+  most_recent = true
+}
+
 locals {
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 
@@ -68,7 +76,10 @@ locals {
 
   bucket_name = "${local.name_prefix}-storage-${random_id.bucket_suffix.hex}"
 
-  public_base_url = "${var.enable_https && var.acm_certificate_arn != null ? "https" : "http"}://${aws_lb.app.dns_name}"
+  effective_acm_certificate_arn = var.acm_certificate_arn != null ? var.acm_certificate_arn : try(data.aws_acm_certificate.https[0].arn, null)
+  https_enabled                 = var.enable_https
+
+  public_base_url = "${local.https_enabled ? "https" : "http"}://${aws_lb.app.dns_name}"
   cors_origins    = jsonencode([local.public_base_url])
   redis_scheme    = var.redis_use_tls ? "rediss" : "redis"
   redis_url       = "${local.redis_scheme}://${aws_elasticache_replication_group.redis.primary_endpoint_address}:${var.redis_port}/0"
@@ -247,9 +258,8 @@ resource "aws_security_group" "alb" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   dynamic "ingress" {
-    for_each = var.enable_https && var.acm_certificate_arn != null ? [1] : []
+    for_each = var.enable_https ? [1] : []
 
     content {
       description = "Public HTTPS"
@@ -289,6 +299,14 @@ resource "aws_security_group" "app" {
     description     = "Backend traffic from ALB"
     from_port       = var.backend_container_port
     to_port         = var.backend_container_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    description     = "Grafana traffic from ALB"
+    from_port       = var.grafana_container_port
+    to_port         = var.grafana_container_port
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
@@ -526,18 +544,57 @@ resource "aws_lb_target_group" "backend" {
   })
 }
 
+resource "aws_lb_target_group" "grafana" {
+  name        = substr("${local.name_prefix}-grafana-tg", 0, 32)
+  port        = var.grafana_container_port
+  protocol    = "HTTP"
+  target_type = "instance"
+  vpc_id      = aws_vpc.main.id
+
+  health_check {
+    enabled             = true
+    path                = "/grafana/login"
+    matcher             = "200-399"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-grafana-tg"
+  })
+}
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.app.arn
   port              = 80
   protocol          = "HTTP"
 
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.frontend.arn
+  dynamic "default_action" {
+    for_each = var.enable_https ? [1] : []
+    content {
+      type = "redirect"
+
+      redirect {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+  }
+
+  dynamic "default_action" {
+    for_each = var.enable_https ? [] : [1]
+    content {
+      type             = "forward"
+      target_group_arn = aws_lb_target_group.frontend.arn
+    }
   }
 }
 
 resource "aws_lb_listener_rule" "api" {
+  count        = var.enable_https ? 0 : 1
   listener_arn = aws_lb_listener.http.arn
   priority     = 100
 
@@ -553,14 +610,37 @@ resource "aws_lb_listener_rule" "api" {
   }
 }
 
+resource "aws_lb_listener_rule" "grafana" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 90
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.grafana.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/grafana*"]
+    }
+  }
+}
+
 resource "aws_lb_listener" "https" {
-  count = var.enable_https && var.acm_certificate_arn != null ? 1 : 0
+  count = var.enable_https ? 1 : 0
 
   load_balancer_arn = aws_lb.app.arn
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.acm_certificate_arn
+  certificate_arn   = local.effective_acm_certificate_arn
+
+  lifecycle {
+    precondition {
+      condition     = local.effective_acm_certificate_arn != null
+      error_message = "HTTPS is enabled but no ISSUED ACM certificate was resolved. Set acm_certificate_arn directly or set acm_certificate_domain to a validated certificate in the same AWS region."
+    }
+  }
 
   default_action {
     type             = "forward"
@@ -569,7 +649,7 @@ resource "aws_lb_listener" "https" {
 }
 
 resource "aws_lb_listener_rule" "api_https" {
-  count        = var.enable_https && var.acm_certificate_arn != null ? 1 : 0
+  count        = var.enable_https ? 1 : 0
   listener_arn = aws_lb_listener.https[0].arn
   priority     = 100
 
@@ -581,6 +661,23 @@ resource "aws_lb_listener_rule" "api_https" {
   condition {
     path_pattern {
       values = ["/api/*", "/health", "/outputs/*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "grafana_https" {
+  count        = var.enable_https ? 1 : 0
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 90
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.grafana.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/grafana*"]
     }
   }
 }
@@ -625,4 +722,10 @@ resource "aws_lb_target_group_attachment" "backend_app_debug" {
   target_group_arn = aws_lb_target_group.backend.arn
   target_id        = aws_instance.app_debug.id
   port             = var.backend_container_port
+}
+
+resource "aws_lb_target_group_attachment" "grafana_app_debug" {
+  target_group_arn = aws_lb_target_group.grafana.arn
+  target_id        = aws_instance.app_debug.id
+  port             = var.grafana_container_port
 }

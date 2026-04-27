@@ -27,8 +27,9 @@ redis_node_type       = "cache.t4g.micro"
 redis_engine_version  = "7.1"
 redis_use_tls         = true
 
-enable_https       = false
+enable_https       = true
 acm_certificate_arn = null
+acm_certificate_domain = "app.example.com"
 
 tags = {
   Owner = "your-name"

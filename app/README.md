@@ -33,6 +33,7 @@ The compose files now include:
 Default access:
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3001`
+- Grafana via ALB path routing: `http://<alb-dns-name>/grafana`
 - Grafana login: `admin` / `prom-operator`
 
 Dashboards are auto-provisioned from:

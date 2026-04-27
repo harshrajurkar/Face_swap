@@ -90,7 +90,17 @@ output "app_instance_private_ip" {
 
 output "public_base_url" {
   description = "Public base URL served by ALB."
-  value       = "${var.enable_https && var.acm_certificate_arn != null ? "https" : "http"}://${aws_lb.app.dns_name}"
+  value       = "${local.https_enabled ? "https" : "http"}://${aws_lb.app.dns_name}"
+}
+
+output "grafana_url" {
+  description = "Grafana URL routed through ALB."
+  value       = "${local.https_enabled ? "https" : "http"}://${aws_lb.app.dns_name}/grafana"
+}
+
+output "effective_acm_certificate_arn" {
+  description = "Resolved ACM certificate ARN used by ALB HTTPS listener (direct ARN or domain auto-discovery)."
+  value       = local.effective_acm_certificate_arn
 }
 
 output "ec2_runtime_env_file" {
