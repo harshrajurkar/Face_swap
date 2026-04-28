@@ -5,6 +5,7 @@ import styles from '../styles/Home.module.css';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 const BACKEND_ORIGIN = process.env.NEXT_PUBLIC_BACKEND_ORIGIN || '';
+const SUPPORTED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
 
 function getBrowserOrigin() {
   if (typeof window === 'undefined') {
@@ -66,6 +67,14 @@ function createPreviewUrl(file) {
   return file ? URL.createObjectURL(file) : '';
 }
 
+function hasSupportedImageExtension(file) {
+  if (!file?.name) {
+    return false;
+  }
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  return SUPPORTED_IMAGE_EXTENSIONS.includes(extension);
+}
+
 function getStatusLabel(status) {
   if (status === 'queued') return 'Queued';
   if (status === 'processing') return 'Processing';
@@ -106,7 +115,7 @@ function Uploader({ title, hint, file, previewUrl, onFileChange }) {
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
           hidden
           onClick={(event) => {
             event.currentTarget.value = '';
@@ -187,7 +196,12 @@ export default function HomePage() {
         }
 
         setStatus(data.status || 'unknown');
-        setError(data.error || '');
+        const backendError = data.error || data.detail || '';
+        const derivedFailureMessage =
+          (data.status === 'failed' && !backendError)
+            ? 'Face swap failed during processing. Please try again with clearer supported images.'
+            : '';
+        setError(backendError || derivedFailureMessage);
         setJobPrompt(data.prompt || '');
         setJobEnhanceFace(Boolean(data.enhance_face));
         setServerProgress(typeof data.progress === 'number' ? data.progress : null);
@@ -225,12 +239,26 @@ export default function HomePage() {
 
   function setSourceFile(file) {
     if (sourcePreviewUrl) URL.revokeObjectURL(sourcePreviewUrl);
+    if (file && !hasSupportedImageExtension(file)) {
+      setError('Unsupported source image format. Use .jpg, .jpeg, .png, or .webp.');
+      setSourceImage(null);
+      setSourcePreviewUrl('');
+      return;
+    }
+    setError('');
     setSourceImage(file);
     setSourcePreviewUrl(createPreviewUrl(file));
   }
 
   function setTargetFile(file) {
     if (targetPreviewUrl) URL.revokeObjectURL(targetPreviewUrl);
+    if (file && !hasSupportedImageExtension(file)) {
+      setError('Unsupported target image format. Use .jpg, .jpeg, .png, or .webp.');
+      setTargetImage(null);
+      setTargetPreviewUrl('');
+      return;
+    }
+    setError('');
     setTargetImage(file);
     setTargetPreviewUrl(createPreviewUrl(file));
   }
@@ -261,10 +289,14 @@ export default function HomePage() {
         method: 'POST',
         body: formData,
       });
-
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
       if (!response.ok) {
-        throw new Error(data.detail || 'Job creation failed.');
+        throw new Error(data.detail || data.error || `Job creation failed (HTTP ${response.status}).`);
       }
 
       setJobId(data.job_id);
