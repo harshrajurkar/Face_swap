@@ -86,6 +86,12 @@ variable "grafana_container_port" {
   default     = 3001
 }
 
+variable "prometheus_container_port" {
+  description = "Prometheus container port."
+  type        = number
+  default     = 9090
+}
+
 variable "redis_port" {
   description = "Redis port."
   type        = number
@@ -200,6 +206,12 @@ variable "acm_certificate_domain" {
   description = "Domain name to auto-discover an ISSUED ACM certificate in the same region (used when acm_certificate_arn is null)."
   type        = string
   default     = null
+}
+
+variable "enable_cloudflare_quick_tunnel" {
+  description = "Whether to install and run Cloudflare Quick Tunnel on the app instance."
+  type        = bool
+  default     = true
 }
 
 variable "tags" {

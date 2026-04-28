@@ -30,6 +30,11 @@ repo-clean/
 - `app/`: application code, compose files, and the EC2 deployment script
 - `infra/`: OpenTofu code for VPC, ALB, EC2, ElastiCache, S3, IAM, and user-data bootstrapping
 
+## Documentation
+
+- Full architecture and request/deployment/monitoring flow:
+  - [ARCHITECTURE_AND_FLOW.md](./ARCHITECTURE_AND_FLOW.md)
+
 ## Infra Workflow (OpenTofu)
 
 ```bash

@@ -100,6 +100,7 @@ locals {
     redis_url                  = local.redis_url
     public_base_url            = local.public_base_url
     cors_origins               = local.cors_origins
+    enable_cloudflare_quick_tunnel = var.enable_cloudflare_quick_tunnel
   }))
 }
 
@@ -307,6 +308,14 @@ resource "aws_security_group" "app" {
     description     = "Grafana traffic from ALB"
     from_port       = var.grafana_container_port
     to_port         = var.grafana_container_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    description     = "Prometheus traffic from ALB"
+    from_port       = var.prometheus_container_port
+    to_port         = var.prometheus_container_port
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
@@ -566,6 +575,28 @@ resource "aws_lb_target_group" "grafana" {
   })
 }
 
+resource "aws_lb_target_group" "prometheus" {
+  name        = substr("${local.name_prefix}-prom-tg", 0, 32)
+  port        = var.prometheus_container_port
+  protocol    = "HTTP"
+  target_type = "instance"
+  vpc_id      = aws_vpc.main.id
+
+  health_check {
+    enabled             = true
+    path                = "/prometheus/-/healthy"
+    matcher             = "200-399"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-prometheus-tg"
+  })
+}
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.app.arn
   port              = 80
@@ -626,6 +657,22 @@ resource "aws_lb_listener_rule" "grafana" {
   }
 }
 
+resource "aws_lb_listener_rule" "prometheus" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 80
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.prometheus.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/prometheus*"]
+    }
+  }
+}
+
 resource "aws_lb_listener" "https" {
   count = var.enable_https ? 1 : 0
 
@@ -682,6 +729,23 @@ resource "aws_lb_listener_rule" "grafana_https" {
   }
 }
 
+resource "aws_lb_listener_rule" "prometheus_https" {
+  count        = var.enable_https ? 1 : 0
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 80
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.prometheus.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/prometheus*"]
+    }
+  }
+}
+
 # Single EC2 instance for debugging
 resource "aws_instance" "app_debug" {
   ami                         = data.aws_ami.ubuntu.id
@@ -728,4 +792,10 @@ resource "aws_lb_target_group_attachment" "grafana_app_debug" {
   target_group_arn = aws_lb_target_group.grafana.arn
   target_id        = aws_instance.app_debug.id
   port             = var.grafana_container_port
+}
+
+resource "aws_lb_target_group_attachment" "prometheus_app_debug" {
+  target_group_arn = aws_lb_target_group.prometheus.arn
+  target_id        = aws_instance.app_debug.id
+  port             = var.prometheus_container_port
 }

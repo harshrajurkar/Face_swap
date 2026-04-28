@@ -4,7 +4,7 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -y
-apt-get install -y ca-certificates curl gnupg lsb-release awscli git jq
+apt-get install -y ca-certificates curl gnupg lsb-release awscli git jq wget
 
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -72,4 +72,38 @@ WORKER_MAX_RETRIES=${worker_max_retries}
 EOF
 
 install -m 0755 "$${REPO_DIR}/app/deploy-ec2-single.sh" "$${DEPLOY_SCRIPT_PATH}"
+
+if [ "${enable_cloudflare_quick_tunnel}" = "true" ]; then
+  wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O /tmp/cloudflared.deb
+  dpkg -i /tmp/cloudflared.deb || apt-get install -f -y
+  rm -f /tmp/cloudflared.deb
+fi
+
 "$${DEPLOY_SCRIPT_PATH}"
+
+if [ "${enable_cloudflare_quick_tunnel}" = "true" ]; then
+  cat > /etc/systemd/system/cloudflared-quick-tunnel.service <<'EOF'
+[Unit]
+Description=Cloudflare Quick Tunnel for AI Face Swap
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cloudflared tunnel --url http://localhost:3000 --no-autoupdate
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/cloudflared-quick-tunnel.log
+StandardError=append:/var/log/cloudflared-quick-tunnel.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  systemctl daemon-reload
+  systemctl enable cloudflared-quick-tunnel
+  systemctl restart cloudflared-quick-tunnel
+
+  sleep 15
+  grep -Eo 'https://[-a-zA-Z0-9]+\.trycloudflare\.com' /var/log/cloudflared-quick-tunnel.log | tail -n1 || true
+fi

@@ -30,6 +30,7 @@ redis_use_tls         = true
 enable_https       = true
 acm_certificate_arn = null
 acm_certificate_domain = "app.example.com"
+enable_cloudflare_quick_tunnel = true
 
 tags = {
   Owner = "your-name"
