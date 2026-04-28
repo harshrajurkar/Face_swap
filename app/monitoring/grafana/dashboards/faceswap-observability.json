@@ -185,7 +185,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(container_cpu_usage_seconds_total{container!=\"\",container!~\"POD|\"}[5m])) by (container)",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{image!=\"\",container=~\"app-.*\"}[5m])) by (container)",
           "legendFormat": "{{container}}",
           "refId": "A"
         }
@@ -221,55 +221,9 @@
       },
       "targets": [
         {
-          "expr": "sum(container_memory_working_set_bytes{container!=\"\",container!~\"POD|\"}) by (container)",
+          "expr": "sum(container_memory_working_set_bytes{image!=\"\",container=~\"app-.*\"}) by (container)",
           "legendFormat": "{{container}}",
           "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 9,
-      "type": "heatmap",
-      "title": "HTTP Request Duration Distribution",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(http_request_duration_seconds_bucket{job=\"backend\"}[5m])) by (le)",
-          "format": "heatmap",
-          "legendFormat": "{{le}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 10,
-      "type": "timeseries",
-      "title": "Network Throughput (MB/s)",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "Bps"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(node_network_receive_bytes_total{device!=\"lo\"}[5m]))",
-          "legendFormat": "rx",
-          "refId": "A"
-        },
-        {
-          "expr": "sum(rate(node_network_transmit_bytes_total{device!=\"lo\"}[5m]))",
-          "legendFormat": "tx",
-          "refId": "B"
         }
       ]
     }
