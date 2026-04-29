@@ -1,0 +1,33 @@
+groups:
+  - name: app-and-host-alerts
+    rules:
+      - alert: HighHostCPUUsage
+        expr: (100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High host CPU usage"
+          description: "CPU usage is above 80% for more than 10 minutes on {{ $labels.instance }}."
+
+      - alert: HighHostMemoryUsage
+        expr: ((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High host memory usage"
+          description: "Memory usage is above 85% for more than 10 minutes on {{ $labels.instance }}."
+
+      - alert: High5xxErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="backend",status=~"5.."}[5m])) /
+            clamp_min(sum(rate(http_requests_total{job="backend"}[5m])), 0.001)
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High backend 5xx rate"
+          description: "Backend 5xx rate is above 5% for more than 10 minutes."

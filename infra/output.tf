@@ -90,7 +90,47 @@ output "app_instance_private_ip" {
 
 output "public_base_url" {
   description = "Public base URL served by ALB."
-  value       = "${var.enable_https && var.acm_certificate_arn != null ? "https" : "http"}://${aws_lb.app.dns_name}"
+  value       = local.public_base_url
+}
+
+output "alb_http_url" {
+  description = "Direct HTTP URL for the ALB."
+  value       = "http://${aws_lb.app.dns_name}"
+}
+
+output "grafana_url" {
+  description = "Grafana URL routed through ALB."
+  value       = "${local.public_base_url}/grafana"
+}
+
+output "cloudflare_https_url_fetch_command" {
+  description = "Run on the EC2 instance to print the current Cloudflare Quick Tunnel URL."
+  value       = "sudo grep -Eo 'https://[-a-zA-Z0-9]+[.]trycloudflare[.]com' /var/log/cloudflared-quick-tunnel.log | tail -n1"
+}
+
+output "prometheus_url" {
+  description = "Prometheus URL routed through ALB."
+  value       = "${local.public_base_url}/prometheus"
+}
+
+output "prometheus_private_ui_port_forward_command_ssm" {
+  description = "Run on your local machine to open private Prometheus UI at http://localhost:9090 via SSM."
+  value       = "aws ssm start-session --region ${var.aws_region} --target ${aws_instance.app_debug.id} --document-name AWS-StartPortForwardingSession --parameters '{\"portNumber\":[\"9090\"],\"localPortNumber\":[\"9090\"]}'"
+}
+
+output "cloudflare_https_url_fetch_command_ssm" {
+  description = "AWS CLI command to fetch Cloudflare Quick Tunnel URL over SSM."
+  value       = "aws ssm send-command --region ${var.aws_region} --instance-ids ${aws_instance.app_debug.id} --document-name AWS-RunShellScript --parameters commands=['sudo grep -Eo ''https://[-a-zA-Z0-9]+\\\\.trycloudflare\\\\.com'' /var/log/cloudflared-quick-tunnel.log | tail -n1'] --query 'Command.CommandId' --output text"
+}
+
+output "cloudflare_https_url_print_command_ssm" {
+  description = "Single command that prints the Cloudflare Quick Tunnel URL via SSM."
+  value       = "CMD_ID=$(aws ssm send-command --region ${var.aws_region} --instance-ids ${aws_instance.app_debug.id} --document-name AWS-RunShellScript --parameters commands=['sudo grep -Eo ''https://[-a-zA-Z0-9]+\\\\.trycloudflare\\\\.com'' /var/log/cloudflared-quick-tunnel.log | tail -n1'] --query 'Command.CommandId' --output text); sleep 3; aws ssm get-command-invocation --region ${var.aws_region} --command-id \"$CMD_ID\" --instance-id ${aws_instance.app_debug.id} --query StandardOutputContent --output text"
+}
+
+output "effective_acm_certificate_arn" {
+  description = "Resolved ACM certificate ARN used by ALB HTTPS listener (direct ARN or domain auto-discovery)."
+  value       = local.effective_acm_certificate_arn
 }
 
 output "ec2_runtime_env_file" {

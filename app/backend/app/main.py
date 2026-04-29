@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from fastapi import Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.config import get_settings
 from app.routes.job import router as job_router
@@ -23,6 +24,13 @@ app.add_middleware(
 )
 
 app.include_router(job_router, prefix=settings.api_prefix)
+
+# Expose app-level HTTP metrics for Prometheus scraping.
+Instrumentator(excluded_handlers=["/health", "/metrics"]).instrument(app).expose(
+    app,
+    include_in_schema=False,
+    endpoint="/metrics",
+)
 
 
 @app.get("/health", tags=["health"])

@@ -80,6 +80,18 @@ variable "backend_container_port" {
   default     = 8000
 }
 
+variable "grafana_container_port" {
+  description = "Grafana container port."
+  type        = number
+  default     = 3001
+}
+
+variable "prometheus_container_port" {
+  description = "Prometheus container port."
+  type        = number
+  default     = 9090
+}
+
 variable "redis_port" {
   description = "Redis port."
   type        = number
@@ -177,12 +189,29 @@ variable "enable_https" {
   description = "Whether to create an HTTPS listener on the ALB."
   type        = bool
   default     = false
+
+  validation {
+    condition     = !var.enable_https || var.acm_certificate_arn != null || var.acm_certificate_domain != null
+    error_message = "When enable_https is true, provide either acm_certificate_arn or acm_certificate_domain."
+  }
 }
 
 variable "acm_certificate_arn" {
   description = "ACM certificate ARN for HTTPS."
   type        = string
   default     = null
+}
+
+variable "acm_certificate_domain" {
+  description = "Domain name to auto-discover an ISSUED ACM certificate in the same region (used when acm_certificate_arn is null)."
+  type        = string
+  default     = null
+}
+
+variable "enable_cloudflare_quick_tunnel" {
+  description = "Whether to install and run Cloudflare Quick Tunnel on the app instance."
+  type        = bool
+  default     = true
 }
 
 variable "tags" {
